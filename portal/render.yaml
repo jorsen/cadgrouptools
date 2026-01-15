@@ -5,6 +5,7 @@ services:
     plan: free # Change to 'starter' or higher for production
     buildCommand: apt-get update && apt-get install -y imagemagick && npm install && npm run build
     startCommand: npm start
+    publishDir: .next
     healthCheckPath: /api/health/push
     # Enable WebSocket support (required for Socket.io)
     features:
