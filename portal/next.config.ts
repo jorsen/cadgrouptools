@@ -23,6 +23,9 @@ const nextConfig: NextConfig = {
   },
   // Disable static generation for App Router
   output: 'standalone', // Use standalone output for Render
+  // Force disable static generation
+  trailingSlash: false,
+  distDir: '.next',
   // External packages that should not be bundled by Next.js
   serverExternalPackages: [
     'socket.io',
