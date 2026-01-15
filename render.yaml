@@ -3,6 +3,7 @@ services:
     name: cadgroup-tools-portal
     runtime: node
     plan: starter # Change to 'starter' or higher for production
+    rootDir: portal
     buildCommand: apt-get update && apt-get install -y imagemagick && npm install && npm run build
     startCommand: npm start
     healthCheckPath: /api/health/push
