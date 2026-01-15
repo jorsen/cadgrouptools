@@ -5,7 +5,7 @@ services:
     plan: starter
     nodeVersion: 18
     rootDir: portal
-    buildCommand: apt-get update && apt-get install -y imagemagick && npm install && npm run build
+    buildCommand: npm install && npm run build
     startCommand: npm start
     publishDir: .next
     healthCheckPath: /api/health/push
