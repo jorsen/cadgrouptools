@@ -3,10 +3,9 @@ services:
     name: cadgroup-tools-portal
     env: node
     plan: starter # Change to 'starter' or higher for production
-    rootDir: portal
-    buildCommand: apt-get update && apt-get install -y imagemagick && npm install && npm run build
-    startCommand: npm start
-    publishDir: .next
+    buildCommand: cd portal && apt-get update && apt-get install -y imagemagick && npm install && npm run build
+    startCommand: cd portal && npm start
+    publishDir: portal/.next
     healthCheckPath: /api/health/push
     # Enable WebSocket support (required for Socket.io)
     features:
