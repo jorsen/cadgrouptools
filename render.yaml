@@ -4,9 +4,10 @@ services:
     env: node
     plan: starter # Change to 'starter' or higher for production
     nodeVersion: 18 # Use Node.js 18 for Render compatibility
-    buildCommand: cd portal && apt-get update && apt-get install -y imagemagick && npm install && npm run build
-    startCommand: cd portal && npm start
-    publishDir: portal/.next
+    rootDir: portal
+    buildCommand: apt-get update && apt-get install -y imagemagick && npm install && npm run build
+    startCommand: npm start
+    publishDir: .next
     healthCheckPath: /api/health/push
     # Enable WebSocket support (required for Socket.io)
     features:
