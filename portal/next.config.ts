@@ -26,6 +26,10 @@ const nextConfig: NextConfig = {
   // Force disable static generation
   trailingSlash: false,
   distDir: '.next',
+  // Completely disable static page generation
+  experimental: {
+    serverComponentsExternalPackages: ['socket.io', 'pdfjs-dist', 'pdf-parse', 'tesseract.js', 'pdf2pic', 'canvas'],
+  },
   // External packages that should not be bundled by Next.js
   serverExternalPackages: [
     'socket.io',
@@ -52,7 +56,9 @@ const nextConfig: NextConfig = {
     return config;
   },
   // Skip static generation for error pages
-  experimental: {},
+  experimental: {
+    serverComponentsExternalPackages: ['socket.io', 'pdfjs-dist', 'pdf-parse', 'tesseract.js', 'pdf2pic', 'canvas'],
+  },
 };
 
 export default nextConfig;
