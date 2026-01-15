@@ -1,20 +1,84 @@
 services:
   - type: web
-    name: cad-tools-portal
-    env: node
-    rootDir: portal
-    plan: starter
-    region: oregon
-    autoDeploy: true
-    buildCommand: npm install && npm run build
-    startCommand: npm run start -- -p $PORT
+    name: cadgroup-tools-portal
+    runtime: node
+    plan: starter # Change to 'starter' or higher for production
+    buildCommand: apt-get update && apt-get install -y imagemagick && npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health/push
+    # Enable WebSocket support (required for Socket.io)
+    features:
+      - websockets
     envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
       - key: MONGODB_URI
+        sync: false # Set in Render dashboard
       - key: DB_NAME
+        value: cadtools
+      - key: NEXTAUTH_URL
+        sync: false # Set to your Render URL
+      - key: NEXTAUTH_SECRET
+        generateValue: true # Render will generate a secure secret
+      
+      # Push Notification Configuration (REQUIRED)
+      - key: NEXT_PUBLIC_VAPID_PUBLIC_KEY
+        sync: false # Generate with scripts/generate-vapid-keys.js
+      - key: VAPID_PRIVATE_KEY
+        sync: false # Generate with scripts/generate-vapid-keys.js
+      - key: VAPID_SUBJECT
+        value: mailto:admin@cadgroupmgt.com
+      
+      # Email Fallback Configuration (RECOMMENDED)
       - key: SENDGRID_API_KEY
+        sync: false # Set in dashboard for email fallback
       - key: SENDGRID_FROM_EMAIL
+        value: notifications@cadgroupmgt.com
       - key: SENDGRID_FROM_NAME
         value: CADGroup Tools Portal
+      
+      # Push Notification Settings
+      - key: NOTIFICATION_BATCH_SIZE
+        value: "100" # Number of notifications to send in parallel
+      - key: NOTIFICATION_RETRY_ATTEMPTS
+        value: "3" # Number of retry attempts for failed notifications
+      - key: NOTIFICATION_TIMEOUT_MS
+        value: "5000" # Timeout for each notification send
+      - key: NOTIFICATION_CLEANUP_DAYS
+        value: "30" # Days to keep inactive subscriptions
+      - key: NOTIFICATION_RATE_LIMIT_PER_USER
+        value: "50" # Max notifications per user per day
+      - key: NOTIFICATION_RATE_LIMIT_WINDOW_MS
+        value: "900000" # Rate limit window (15 minutes)
+      
+      # WebSocket Configuration
+      - key: NEXT_PUBLIC_WEBSOCKET_URL
+        sync: false # Set to your Render URL (e.g., https://cadgrouptools.onrender.com)
+      - key: WEBSOCKET_ENABLED
+        value: "true"
+      - key: WEBSOCKET_PING_INTERVAL
+        value: "25000" # Ping interval in milliseconds
+      - key: WEBSOCKET_PING_TIMEOUT
+        value: "60000" # Ping timeout in milliseconds
+      - key: HOSTNAME
+        value: "0.0.0.0" # Bind to all interfaces for Render
+      
+      # Optional Services
       - key: SEMRUSH_API_KEY
-      - key: GOOGLE_API_KEY
+        sync: false # Optional
+      # OCR is now handled by Tesseract.js (no API keys required)
+      
+      # Supabase Storage Configuration (Primary storage solution)
+      - key: SUPABASE_URL
+        sync: false # Set in dashboard - your Supabase project URL
+      - key: SUPABASE_SERVICE_ROLE
+        sync: false # Set in dashboard - your service role key
+      - key: SUPABASE_BUCKET
+        value: cadgroup-uploads # Default bucket name
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false # Same as SUPABASE_URL
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false # Your anon key (optional)
 
