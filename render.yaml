@@ -16,9 +16,9 @@ services:
       - key: PORT
         value: 10000
       - key: MONGODB_URI
-        sync: false # Set in Render dashboard
+        value: mongodb+srv://marketing:wU8RzIIr6kq6I0@cadtools.dvvdsg1.mongodb.net/?appName=cadtools
       - key: DB_NAME
-        value: cadtools
+        value: cadgroupmgt
       - key: NEXTAUTH_URL
         sync: false # Set to your Render URL
       - key: NEXTAUTH_SECRET
@@ -26,9 +26,9 @@ services:
       
       # Push Notification Configuration (REQUIRED)
       - key: NEXT_PUBLIC_VAPID_PUBLIC_KEY
-        sync: false # Generate with scripts/generate-vapid-keys.js
+        value: BB7T5l8cQ-7CN-1KHWToSMYcZJaBTlh3yId8FkaVLuW87KQ5YWW0F0sAKPVHqltE2_p60jXOSbIBsRZn4YyMyHU
       - key: VAPID_PRIVATE_KEY
-        sync: false # Generate with scripts/generate-vapid-keys.js
+        sync: false # Set in Render dashboard
       - key: VAPID_SUBJECT
         value: mailto:admin@cadgroupmgt.com
       
@@ -71,15 +71,43 @@ services:
         sync: false # Optional
       # OCR is now handled by Tesseract.js (no API keys required)
       
+      # Claude AI Configuration
+      - key: ANTHROPIC_API_KEY
+        sync: false # Set in dashboard
+      
+      # Manus AI Configuration
+      - key: MANUS_API_KEY
+        sync: false # Set in dashboard
+      - key: MANUS_BASE_URL
+        value: https://api.manus.ai/v1
+      - key: MANUS_WEBHOOK_SECRET
+        sync: false # Set in dashboard
+      
+      # GoHighLevel Configuration - Murphy Consulting
+      - key: GHL_API_KEY
+        sync: false # Set in dashboard
+      - key: GHL_LOCATION_ID
+        value: 62kZ0CQqMotRWvdIjMZS
+      - key: GHL_WEBHOOK_SECRET
+        sync: false # Set in dashboard
+      
+      # GoHighLevel Configuration - ESystems Management
+      - key: GHL_ESYSTEMS_API_KEY
+        sync: false # Set in dashboard
+      - key: GHL_ESYSTEMS_LOCATION_ID
+        value: dXPpkZ3hX5PCKayZrLsI
+      - key: GHL_ESYSTEMS_WEBHOOK_SECRET
+        sync: false # Set in dashboard
+      
       # Supabase Storage Configuration (Primary storage solution)
       - key: SUPABASE_URL
-        sync: false # Set in dashboard - your Supabase project URL
+        value: https://cpoeuapfcbwymoftfmsf.supabase.co
       - key: SUPABASE_SERVICE_ROLE
         sync: false # Set in dashboard - your service role key
       - key: SUPABASE_BUCKET
         value: cadgroup-uploads # Default bucket name
       - key: NEXT_PUBLIC_SUPABASE_URL
-        sync: false # Same as SUPABASE_URL
+        value: https://cpoeuapfcbwymoftfmsf.supabase.co
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
-        sync: false # Your anon key (optional)
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwb2V1YXBmY2J3eW1vZnRmbXNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNDU1NTgsImV4cCI6MjA3MDcyMTU1OH0.IpF_QibaiYPca6r8OGVcENXZN665v9RUDuOvuTYa_aw
 
