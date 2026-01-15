@@ -4,10 +4,9 @@ services:
     env: node
     plan: starter
     nodeVersion: 18
-    rootDir: portal
-    buildCommand: npm install && npm run build
-    startCommand: npm start
-    publishDir: .next
+    buildCommand: cd portal && npm install && npm run build
+    startCommand: cd portal && npm start
+    publishDir: portal/.next
     healthCheckPath: /api/health/push
     features:
       - websockets
