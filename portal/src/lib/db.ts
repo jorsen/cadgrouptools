@@ -76,4 +76,7 @@ export function getConnectionState(): 'disconnected' | 'connected' | 'connecting
   }
 }
 
+// Alias for backward compatibility
+export const connectDB = connectToDatabase;
+
 

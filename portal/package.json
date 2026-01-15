@@ -18,10 +18,10 @@
     "seed:accounts": "ts-node src/scripts/seedAccounts.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.24.0",
     "@ant-design/charts": "^2.6.1",
     "@ant-design/icons": "^6.0.0",
     "@ant-design/nextjs-registry": "^1.1.0",
+    "@anthropic-ai/sdk": "^0.24.0",
     "@auth/mongodb-adapter": "^3.10.0",
     "@lottiefiles/dotlottie-react": "^0.14.4",
     "@monaco-editor/react": "^4.7.0",
@@ -55,7 +55,8 @@
     "socket.io-client": "^4.8.1",
     "tailwindcss": "^4",
     "tesseract.js": "^6.0.1",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -72,6 +73,7 @@
     "@types/react-dom": "^19",
     "@types/recharts": "^1.8.29",
     "@types/web-push": "^3.6.4",
+    "@types/xlsx": "^0.0.35",
     "chalk": "^5.6.0",
     "eslint": "^9",
     "eslint-config-next": "15.4.6",
@@ -80,7 +82,7 @@
     "typescript": "^5"
   },
   "optionalDependencies": {
-    "lightningcss-linux-x64-gnu": "^1.30.0",
-    "@tailwindcss/oxide-linux-x64-gnu": "^4.0.0"
+    "@tailwindcss/oxide-linux-x64-gnu": "^4.0.0",
+    "lightningcss-linux-x64-gnu": "^1.30.0"
   }
 }

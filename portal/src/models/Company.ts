@@ -2,9 +2,9 @@ import { Schema, model, models } from 'mongoose';
 
 const CompanySchema = new Schema(
   {
-    name: { type: String, required: true, unique: true, index: true },
+    name: { type: String, required: true, unique: true },
     legalName: { type: String, required: true },
-    slug: { type: String, required: true, unique: true, index: true },
+    slug: { type: String, required: true, unique: true },
     taxId: { type: String }, // BIR TIN for Philippines
     currency: { type: String, default: 'PHP' },
     fiscalYearEnd: { type: Number, min: 1, max: 12, default: 12 }, // Month (1-12)

@@ -8,7 +8,7 @@ import {
   RiseOutlined,
   UnorderedListOutlined,
   GlobalOutlined,
-  CompareOutlined,
+  SwapOutlined,
   WalletOutlined,
   FileTextOutlined,
   WarningOutlined,
@@ -83,7 +83,7 @@ const reportCategories = [
       {
         title: 'Company Comparison',
         description: 'Side-by-side performance comparison',
-        icon: <CompareOutlined style={{ fontSize: 32 }} />,
+        icon: <SwapOutlined style={{ fontSize: 32 }} />,
         href: '/reports/consolidated/comparison',
         color: '#eb2f96',
       },

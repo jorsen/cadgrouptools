@@ -1,6 +1,6 @@
 'use client';
 
-import { Line, Pie, Bar, Area } from 'react-chartjs-2';
+import { Line, Pie, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -158,7 +158,7 @@ interface CashFlowChartProps {
 }
 
 export function CashFlowChart({ data, height = 300 }: CashFlowChartProps) {
-  const options: ChartOptions<'area'> = {
+  const options: ChartOptions<'line'> = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -204,7 +204,7 @@ export function CashFlowChart({ data, height = 300 }: CashFlowChartProps) {
 
   return (
     <div style={{ height }}>
-      <Area options={options} data={data} />
+      <Line options={options} data={data} />
     </div>
   );
 }

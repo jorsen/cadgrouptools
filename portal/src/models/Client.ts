@@ -43,5 +43,6 @@ const ClientSchema = new Schema(
 ClientSchema.index({ organization: 1, website: 1 });
 
 export const Client = models.Client || model('Client', ClientSchema);
+export default Client;
 
 

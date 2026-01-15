@@ -35,7 +35,8 @@ const nextConfig: NextConfig = {
     'pdf-parse',
     'tesseract.js',
     'pdf2pic',
-    'canvas'
+    'canvas',
+    'xlsx'
   ],
   // Webpack configuration for PDF.js and other packages
   webpack: (config, { isServer }) => {
@@ -52,10 +53,6 @@ const nextConfig: NextConfig = {
     }
 
     return config;
-  },
-  // Skip static generation for error pages
-  experimental: {
-    serverComponentsExternalPackages: ['socket.io', 'pdfjs-dist', 'pdf-parse', 'tesseract.js', 'pdf2pic', 'canvas'],
   },
 };
 

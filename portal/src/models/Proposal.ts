@@ -17,5 +17,6 @@ const ProposalSchema = new Schema(
 ProposalSchema.index({ createdAt: -1 });
 
 export const Proposal = models.Proposal || model('Proposal', ProposalSchema);
+export default Proposal;
 
 
