@@ -4,7 +4,7 @@ services:
     env: node
     plan: starter # Change to 'starter' or higher for production
     nodeVersion: 18 # Use Node.js 18 for Render compatibility
-    buildCommand: cd portal && apt-get update && apt-get install -y imagemagick && npm ci && npm run build
+    buildCommand: cd portal && apt-get update && apt-get install -y imagemagick && npm install && npm run build
     startCommand: cd portal && npm start
     publishDir: portal/.next
     healthCheckPath: /api/health/push
