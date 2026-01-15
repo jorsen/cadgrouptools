@@ -1,7 +1,7 @@
 services:
   - type: web
     name: cadgroup-tools-portal
-    runtime: node
+    env: node
     plan: free # Change to 'starter' or higher for production
     buildCommand: apt-get update && apt-get install -y imagemagick && npm install && npm run build
     startCommand: npm start
