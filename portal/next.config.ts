@@ -22,7 +22,7 @@ const nextConfig: NextConfig = {
     unoptimized: true, // Disable Next.js image optimization for Render
   },
   // Disable static generation for App Router
-  output: undefined, // Let Next.js handle output mode automatically
+  output: 'standalone', // Use standalone output for Render
   // External packages that should not be bundled by Next.js
   serverExternalPackages: [
     'socket.io',
@@ -49,9 +49,7 @@ const nextConfig: NextConfig = {
     return config;
   },
   // Skip static generation for error pages
-  experimental: {
-    missingSuspenseWithCSRBailout: false,
-  },
+  experimental: {},
 };
 
 export default nextConfig;
