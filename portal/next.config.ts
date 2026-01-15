@@ -21,6 +21,8 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true, // Disable Next.js image optimization for Render
   },
+  // Disable static generation for App Router
+  output: undefined, // Let Next.js handle output mode automatically
   // External packages that should not be bundled by Next.js
   serverExternalPackages: [
     'socket.io',
@@ -35,7 +37,7 @@ const nextConfig: NextConfig = {
     // Handle pdfjs-dist worker issues
     config.resolve.alias = {
       ...config.resolve.alias,
-      // Force pdfjs-dist to use the build without workers in Node.js
+      // Force pdfjs-dist to use the build without workers
       'pdfjs-dist/build/pdf.worker.entry': false,
     };
 
@@ -45,6 +47,10 @@ const nextConfig: NextConfig = {
     }
 
     return config;
+  },
+  // Skip static generation for error pages
+  experimental: {
+    missingSuspenseWithCSRBailout: false,
   },
 };
 
