@@ -2,14 +2,13 @@ services:
   - type: web
     name: cadgroup-tools-portal
     env: node
-    plan: starter # Change to 'starter' or higher for production
-    nodeVersion: 18 # Use Node.js 18 for Render compatibility
+    plan: starter
+    nodeVersion: 18
     rootDir: portal
     buildCommand: apt-get update && apt-get install -y imagemagick && npm install && npm run build
     startCommand: npm start
     publishDir: .next
     healthCheckPath: /api/health/push
-    # Enable WebSocket support (required for Socket.io)
     features:
       - websockets
     envVars:
@@ -22,94 +21,72 @@ services:
       - key: DB_NAME
         value: cadgroupmgt
       - key: NEXTAUTH_URL
-        sync: false # Set to your Render URL
+        sync: false
       - key: NEXTAUTH_SECRET
-        generateValue: true # Render will generate a secure secret
-      
-      # Push Notification Configuration (REQUIRED)
+        generateValue: true
       - key: NEXT_PUBLIC_VAPID_PUBLIC_KEY
         value: BB7T5l8cQ-7CN-1KHWToSMYcZJaBTlh3yId8FkaVLuW87KQ5YWW0F0sAKPVHqltE2_p60jXOSbIBsRZn4YyMyHU
       - key: VAPID_PRIVATE_KEY
-        sync: false # Set in Render dashboard
+        sync: false
       - key: VAPID_SUBJECT
         value: mailto:admin@cadgroupmgt.com
-      
-      # Email Fallback Configuration (RECOMMENDED)
       - key: SENDGRID_API_KEY
-        sync: false # Set in dashboard for email fallback
+        sync: false
       - key: SENDGRID_FROM_EMAIL
         value: notifications@cadgroupmgt.com
       - key: SENDGRID_FROM_NAME
         value: CADGroup Tools Portal
-      
-      # Push Notification Settings
       - key: NOTIFICATION_BATCH_SIZE
-        value: "100" # Number of notifications to send in parallel
+        value: "100"
       - key: NOTIFICATION_RETRY_ATTEMPTS
-        value: "3" # Number of retry attempts for failed notifications
+        value: "3"
       - key: NOTIFICATION_TIMEOUT_MS
-        value: "5000" # Timeout for each notification send
+        value: "5000"
       - key: NOTIFICATION_CLEANUP_DAYS
-        value: "30" # Days to keep inactive subscriptions
+        value: "30"
       - key: NOTIFICATION_RATE_LIMIT_PER_USER
-        value: "50" # Max notifications per user per day
+        value: "50"
       - key: NOTIFICATION_RATE_LIMIT_WINDOW_MS
-        value: "900000" # Rate limit window (15 minutes)
-      
-      # WebSocket Configuration
+        value: "900000"
       - key: NEXT_PUBLIC_WEBSOCKET_URL
-        sync: false # Set to your Render URL (e.g., https://cadgrouptools.onrender.com)
+        sync: false
       - key: WEBSOCKET_ENABLED
         value: "true"
       - key: WEBSOCKET_PING_INTERVAL
-        value: "25000" # Ping interval in milliseconds
+        value: "25000"
       - key: WEBSOCKET_PING_TIMEOUT
-        value: "60000" # Ping timeout in milliseconds
+        value: "60000"
       - key: HOSTNAME
-        value: "0.0.0.0" # Bind to all interfaces for Render
-      
-      # Optional Services
+        value: "0.0.0.0"
       - key: SEMRUSH_API_KEY
-        sync: false # Optional
-      # OCR is now handled by Tesseract.js (no API keys required)
-      
-      # Claude AI Configuration
+        sync: false
       - key: ANTHROPIC_API_KEY
-        sync: false # Set in dashboard
-      
-      # Manus AI Configuration
+        sync: false
       - key: MANUS_API_KEY
-        sync: false # Set in dashboard
+        sync: false
       - key: MANUS_BASE_URL
         value: https://api.manus.ai/v1
       - key: MANUS_WEBHOOK_SECRET
-        sync: false # Set in dashboard
-      
-      # GoHighLevel Configuration - Murphy Consulting
+        sync: false
       - key: GHL_API_KEY
-        sync: false # Set in dashboard
+        sync: false
       - key: GHL_LOCATION_ID
         value: 62kZ0CQqMotRWvdIjMZS
       - key: GHL_WEBHOOK_SECRET
-        sync: false # Set in dashboard
-      
-      # GoHighLevel Configuration - ESystems Management
+        sync: false
       - key: GHL_ESYSTEMS_API_KEY
-        sync: false # Set in dashboard
+        sync: false
       - key: GHL_ESYSTEMS_LOCATION_ID
         value: dXPpkZ3hX5PCKayZrLsI
       - key: GHL_ESYSTEMS_WEBHOOK_SECRET
-        sync: false # Set in dashboard
-      
-      # Supabase Storage Configuration (Primary storage solution)
+        sync: false
       - key: SUPABASE_URL
         value: https://cpoeuapfcbwymoftfmsf.supabase.co
       - key: SUPABASE_SERVICE_ROLE
-        sync: false # Set in dashboard - your service role key
+        sync: false
       - key: SUPABASE_BUCKET
-        value: cadgroup-uploads # Default bucket name
+        value: cadgroup-uploads
       - key: NEXT_PUBLIC_SUPABASE_URL
         value: https://cpoeuapfcbwymoftfmsf.supabase.co
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
         value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwb2V1YXBmY2J3eW1vZnRmbXNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNDU1NTgsImV4cCI6MjA3MDcyMTU1OH0.IpF_QibaiYPca6r8OGVcENXZN665v9RUDuOvuTYa_aw
-
