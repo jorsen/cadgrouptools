@@ -3,12 +3,13 @@ import { connectToDatabase } from '@/lib/db';
 import Persona from '@/models/Persona';
 
 // GET /api/personas/by-form/[formId] - Get active persona for form
-export async function GET(request: NextRequest, { params }: { params: { formId: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ formId: string }> }) {
   try {
     await connectToDatabase();
 
+    const { formId } = await params;
     const persona = await Persona.findOne({
-      ghlFormId: params.formId,
+      ghlFormId: formId,
       isActive: true,
     }).lean();
 
