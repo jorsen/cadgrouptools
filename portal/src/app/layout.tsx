@@ -90,3 +90,6 @@ export default function RootLayout({
     </html>
   );
 }
+
+// Force dynamic rendering
+export const dynamic = 'force-dynamic';
