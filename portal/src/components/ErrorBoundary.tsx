@@ -3,8 +3,6 @@
 import React, { Component, ReactNode } from 'react';
 import { Result, Button, Typography, Collapse } from 'antd';
 import { BugOutlined, ReloadOutlined, HomeOutlined } from '@ant-design/icons';
-import * as Sentry from '@sentry/nextjs';
-import { logger } from '@/lib/logger';
 
 const { Paragraph, Text } = Typography;
 const { Panel } = Collapse;
@@ -45,25 +43,14 @@ export default class ErrorBoundary extends Component<Props, State> {
     // Generate error ID
     const errorId = `error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-    // Log to console in development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Error Boundary caught an error:', error, errorInfo);
-    }
-
-    // Log to structured logger
-    logger.error('React Error Boundary', error, {
+    // Log to console
+    console.error('Error Boundary caught an error:', {
       errorId,
+      message: error.message,
+      stack: error.stack,
       componentStack: errorInfo.componentStack,
-      url: window.location.href,
-      userAgent: navigator.userAgent,
-    });
-
-    // Report to Sentry
-    Sentry.withScope((scope) => {
-      scope.setTag('errorBoundary', true);
-      scope.setTag('errorId', errorId);
-      scope.setContext('errorInfo', errorInfo);
-      Sentry.captureException(error);
+      url: typeof window !== 'undefined' ? window.location.href : '',
+      userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
     });
 
     // Update state with error details

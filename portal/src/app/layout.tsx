@@ -2,7 +2,6 @@ import type { Metadata } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
-import ErrorBoundary from '@/components/ErrorBoundary';
 import { reportWebVitals as reportVitals } from '@/lib/performance';
 
 const inter = Inter({
@@ -83,9 +82,7 @@ export default function RootLayout({
         className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
         suppressHydrationWarning
       >
-        <ErrorBoundary>
-          <Providers>{children}</Providers>
-        </ErrorBoundary>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );
