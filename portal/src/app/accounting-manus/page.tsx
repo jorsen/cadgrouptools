@@ -14,6 +14,7 @@ import {
   Alert,
   Row,
   Col,
+  Input,
 } from 'antd';
 import {
   UploadOutlined,
@@ -66,21 +67,45 @@ export default function AccountingUploadPage() {
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
 
   const handleUpload = async (values: any) => {
+    // Validate company selection
+    if (!values.company && !selectedCompany) {
+      message.error('Please select a company');
+      return;
+    }
+
     if (fileList.length === 0) {
       message.error('Please select a file to upload');
       return;
     }
+
+    // Use selectedCompany as fallback if form value is not set
+    const companyValue = values.company || selectedCompany;
 
     setUploading(true);
 
     try {
       const file = fileList[0];
       const formData = new FormData();
-      formData.append('file', file.originFileObj as Blob);
-      formData.append('company', values.company);
+      
+      // Get the actual file - handle both UploadFile and File types
+      const actualFile = file.originFileObj || file;
+      if (!actualFile) {
+        throw new Error('Invalid file object');
+      }
+      
+      formData.append('file', actualFile as Blob);
+      formData.append('company', companyValue);
       formData.append('month', values.month);
       formData.append('year', values.year.toString());
       formData.append('documentType', values.documentType);
+
+      console.log('Uploading document:', {
+        company: companyValue,
+        month: values.month,
+        year: values.year,
+        documentType: values.documentType,
+        fileName: (actualFile as File).name,
+      });
 
       const response = await fetch('/api/accounting/upload', {
         method: 'POST',
@@ -88,8 +113,8 @@ export default function AccountingUploadPage() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Upload failed');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.error || `Upload failed with status ${response.status}`);
       }
 
       const data = await response.json();
@@ -98,7 +123,8 @@ export default function AccountingUploadPage() {
       
       setFileList([]);
       form.resetFields();
-      router.push(`/accounting-manus/${values.company}`);
+      setSelectedCompany(null);
+      router.push(`/accounting-manus/${companyValue}`);
 
     } catch (error: any) {
       console.error('Upload error:', error);
@@ -234,8 +260,8 @@ export default function AccountingUploadPage() {
                 year: currentYear,
               }}
             >
-              <Form.Item name="company" hidden>
-                <input />
+              <Form.Item name="company" hidden rules={[{ required: true, message: 'Please select a company' }]}>
+                <Input />
               </Form.Item>
 
               <Card title="Document Details" className="gradient-card mb-6">
