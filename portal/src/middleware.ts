@@ -46,6 +46,8 @@ export default withAuth(
             pathname === '/api/health/push' ||
             // Debug endpoints (should be removed in production)
             pathname.startsWith('/api/debug/') ||
+            // GridFS file access (files are served via API)
+            pathname.startsWith('/api/files/gridfs/') ||
             // Temporarily allow transactions for debugging
             pathname.startsWith('/accounting/transactions') ||
             pathname.startsWith('/api/transactions')) {

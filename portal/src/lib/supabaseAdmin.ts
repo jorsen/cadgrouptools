@@ -7,6 +7,27 @@ let _initializationAttempted = false;
 // Get the bucket name from server env (default to cadgroup-uploads to match Render config)
 export const STORAGE_BUCKET = process.env.SUPABASE_BUCKET || 'cadgroup-uploads';
 
+// Custom fetch with timeout and better error handling for serverless environments
+const customFetch = async (url: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timeout after 30 seconds: ${url}`);
+    }
+    throw error;
+  }
+};
+
 // Lazy initialization function to get Supabase admin client
 export function getSupabaseAdmin(): SupabaseClient | null {
   // Return cached client if already initialized
@@ -52,6 +73,7 @@ export function getSupabaseAdmin(): SupabaseClient | null {
           detectSessionInUrl: false
         },
         global: {
+          fetch: customFetch,
           headers: {
             'x-client-info': 'cadgroup-portal'
           }
@@ -64,6 +86,12 @@ export function getSupabaseAdmin(): SupabaseClient | null {
     console.error('[Supabase] Failed to create admin client:', error);
     return null;
   }
+}
+
+// Reset the client (useful for testing or when env vars change)
+export function resetSupabaseAdmin(): void {
+  _supabaseAdmin = null;
+  _initializationAttempted = false;
 }
 
 // For backward compatibility - lazy getter

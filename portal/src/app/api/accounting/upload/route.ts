@@ -5,8 +5,47 @@ import ManusTask from '@/models/ManusTask';
 import { requireAuth } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-config';
+import { uploadToGridFS, getGridFSFileUrl } from '@/lib/gridfsStorage';
 import { getSupabaseAdmin, STORAGE_BUCKET, getSupabaseStatus } from '@/lib/supabaseAdmin';
 import manusService from '@/services/manusService';
+
+// Storage type for tracking where files are stored
+type StorageType = 'gridfs' | 'supabase';
+
+// Try to upload to Supabase (optional, may fail due to network issues)
+async function trySupabaseUpload(
+  uint8Array: Uint8Array,
+  fileName: string,
+  contentType: string
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return { success: false, error: 'Supabase client not initialized' };
+    }
+
+    const bucketName = process.env.SUPABASE_BUCKET || STORAGE_BUCKET || 'cadgroup-uploads';
+    
+    const { data, error } = await supabase.storage
+      .from(bucketName)
+      .upload(fileName, uint8Array, {
+        contentType: contentType || 'application/octet-stream',
+        upsert: false,
+      });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    const { data: urlData } = supabase.storage
+      .from(bucketName)
+      .getPublicUrl(fileName);
+
+    return { success: true, url: urlData.publicUrl };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
 
 // POST /api/accounting/upload - Upload accounting document
 export const POST = requireAuth(async (request: NextRequest) => {
@@ -48,99 +87,79 @@ export const POST = requireAuth(async (request: NextRequest) => {
 
     await connectToDatabase();
 
-    // Get Supabase client (lazy initialization)
-    const supabaseStatus = getSupabaseStatus();
-    console.log('Supabase status:', supabaseStatus);
-    
-    const supabase = getSupabaseAdmin();
-    if (!supabase) {
-      console.error('Supabase admin client not initialized');
-      return NextResponse.json(
-        { error: 'Storage service not configured', details: supabaseStatus },
-        { status: 503 }
-      );
-    }
-
-    const bucketName = process.env.SUPABASE_BUCKET || STORAGE_BUCKET || 'cadgroup-uploads';
-
-    // Upload file to Supabase
-    const fileExt = file.name.split('.').pop() || 'pdf';
-    const fileName = `accounting/${company}/${year}/${month}/${Date.now()}.${fileExt}`;
-    
-    console.log('Preparing Supabase upload:', { bucketName, fileName, fileType: file.type, fileSize: file.size });
-    
     // Convert file to buffer
     const fileBuffer = await file.arrayBuffer();
     const uint8Array = new Uint8Array(fileBuffer);
+    const buffer = Buffer.from(fileBuffer);
     
     console.log('File buffer ready, size:', uint8Array.length);
-    
-    // Upload to Supabase with retry logic
-    let uploadData;
-    let uploadError;
-    let retries = 0;
-    const maxRetries = 2;
-    
-    while (retries <= maxRetries) {
-      try {
-        const result = await supabase.storage
-          .from(bucketName)
-          .upload(fileName, uint8Array, {
-            contentType: file.type || 'application/octet-stream',
-            upsert: false,
-          });
-        
-        uploadData = result.data;
-        uploadError = result.error;
-        
-        if (!uploadError) {
-          break;
-        }
-        
-        console.error(`Supabase upload attempt ${retries + 1} failed:`, uploadError);
-        retries++;
-        
-        if (retries <= maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * retries));
-        }
-      } catch (networkError: any) {
-        console.error(`Supabase upload network error (attempt ${retries + 1}):`, networkError.message);
-        retries++;
-        
-        if (retries <= maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 1000 * retries));
-        } else {
-          throw new Error(`Network error uploading to storage after ${maxRetries + 1} attempts: ${networkError.message}`);
-        }
-      }
-    }
 
-    if (uploadError) {
-      console.error('Supabase upload error after retries:', uploadError);
+    // Generate file path
+    const fileExt = file.name.split('.').pop() || 'pdf';
+    const fileName = `accounting/${company}/${year}/${month}/${Date.now()}.${fileExt}`;
+
+    // Primary storage: GridFS (MongoDB) - this should always work since MongoDB is connected
+    let storageType: StorageType = 'gridfs';
+    let fileUrl: string;
+    let storagePath: string;
+    let gridfsFileId: string | undefined;
+
+    console.log('Uploading to GridFS (primary storage)...');
+    
+    try {
+      const gridfsResult = await uploadToGridFS(buffer, fileName, {
+        contentType: file.type,
+        company,
+        month,
+        year,
+        documentType,
+        uploadedBy: session?.user?.id,
+      });
+      
+      gridfsFileId = gridfsResult.fileId;
+      fileUrl = getGridFSFileUrl(gridfsResult.fileId);
+      storagePath = `gridfs://${gridfsResult.fileId}`;
+      
+      console.log('GridFS upload successful:', gridfsResult);
+    } catch (gridfsError: any) {
+      console.error('GridFS upload failed:', gridfsError);
       return NextResponse.json(
-        { error: 'Failed to upload to storage', message: uploadError.message, code: (uploadError as any).name },
+        { error: 'Failed to upload file to storage', message: gridfsError.message },
         { status: 500 }
       );
     }
 
-    console.log('Supabase upload successful:', uploadData);
-
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from(bucketName)
-      .getPublicUrl(fileName);
+    // Optional: Try Supabase as secondary storage (for CDN/public access)
+    // This is non-blocking - if it fails, we still have the file in GridFS
+    const supabaseStatus = getSupabaseStatus();
+    console.log('Supabase status:', supabaseStatus);
+    
+    if (supabaseStatus.initialized) {
+      console.log('Attempting Supabase upload (secondary storage)...');
+      const supabaseResult = await trySupabaseUpload(uint8Array, fileName, file.type);
+      
+      if (supabaseResult.success && supabaseResult.url) {
+        console.log('Supabase upload successful:', supabaseResult.url);
+        // Use Supabase URL as the public URL (better for CDN)
+        fileUrl = supabaseResult.url;
+        storagePath = fileName;
+        storageType = 'supabase';
+      } else {
+        console.warn('Supabase upload failed (using GridFS):', supabaseResult.error);
+        // Keep using GridFS URL
+      }
+    }
 
     // Check if company already has a persistent Manus task
     let existingManusTask = await ManusTask.findOne({
       taskType: 'accounting',
       company,
-      status: { $ne: 'failed' }, // Don't reuse failed tasks
+      status: { $ne: 'failed' },
     }).sort({ createdAt: -1 });
 
     let manusTaskId: string;
 
     if (existingManusTask) {
-      // Use existing persistent task
       manusTaskId = existingManusTask.manusTaskId;
       console.log(`Using existing Manus task for ${company}:`, manusTaskId);
     } else {
@@ -148,7 +167,6 @@ export const POST = requireAuth(async (request: NextRequest) => {
       const manusTask = await manusService.createAccountingTask(company);
       manusTaskId = manusTask.id;
 
-      // Create ManusTask record
       existingManusTask = await ManusTask.create({
         manusTaskId,
         taskType: 'accounting',
@@ -169,8 +187,10 @@ export const POST = requireAuth(async (request: NextRequest) => {
       month,
       year,
       documentType,
-      supabasePath: fileName,
-      supabaseUrl: urlData.publicUrl,
+      supabasePath: storagePath,
+      supabaseUrl: fileUrl,
+      gridfsFileId: gridfsFileId,
+      storageType: storageType,
       uploadedBy: session?.user?.id,
       manusTaskId,
       processingStatus: 'uploaded',
@@ -178,17 +198,14 @@ export const POST = requireAuth(async (request: NextRequest) => {
 
     // Upload file to Manus task
     try {
-      const buffer = Buffer.from(fileBuffer);
       await manusService.uploadFileToTask(manusTaskId, buffer, {
         filename: file.name,
         contentType: file.type,
       });
 
-      // Update status to processing
       accountingDoc.processingStatus = 'processing';
       await accountingDoc.save();
 
-      // Update Manus task status
       existingManusTask.status = 'processing';
       existingManusTask.accountingUploadId = accountingDoc._id;
       await existingManusTask.save();
@@ -200,13 +217,14 @@ export const POST = requireAuth(async (request: NextRequest) => {
       accountingDoc.errorMessage = manusError.message;
       await accountingDoc.save();
 
-      return NextResponse.json(
-        { 
-          error: 'Document uploaded to storage but failed to send to Manus AI',
-          document: accountingDoc,
-        },
-        { status: 500 }
-      );
+      // Still return success since file is stored - Manus can be retried
+      return NextResponse.json({
+        success: true,
+        document: accountingDoc,
+        manusTaskId,
+        warning: 'Document uploaded to storage but failed to send to Manus AI. Processing can be retried.',
+        storageType,
+      }, { status: 201 });
     }
 
     return NextResponse.json({
@@ -214,6 +232,7 @@ export const POST = requireAuth(async (request: NextRequest) => {
       document: accountingDoc,
       manusTaskId,
       message: 'Document uploaded and sent to Manus AI for processing',
+      storageType,
     }, { status: 201 });
 
   } catch (error: any) {
@@ -224,4 +243,3 @@ export const POST = requireAuth(async (request: NextRequest) => {
     );
   }
 });
-

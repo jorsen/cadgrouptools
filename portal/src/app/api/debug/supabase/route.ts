@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin, getSupabaseStatus, STORAGE_BUCKET } from '@/lib/supabaseAdmin';
+import { getSupabaseAdmin, getSupabaseStatus, STORAGE_BUCKET, resetSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 // Debug endpoint to check Supabase configuration
 // This should be removed or protected in production
@@ -10,16 +10,89 @@ export async function GET(request: NextRequest) {
   };
 
   // Check environment variables
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_ANON_KEY;
+  
   results.envCheck = {
-    SUPABASE_URL: process.env.SUPABASE_URL ? 'set' : 'missing',
+    SUPABASE_URL: supabaseUrl ? 'set' : 'missing',
     SUPABASE_SERVICE_ROLE: process.env.SUPABASE_SERVICE_ROLE ? 'set' : 'missing',
     SUPABASE_BUCKET: process.env.SUPABASE_BUCKET || `${STORAGE_BUCKET} (default)`,
     SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY ? 'set' : 'missing',
   };
 
+  // Test direct HTTP connectivity to Supabase (bypassing the client)
+  if (supabaseUrl) {
+    try {
+      console.log('[Debug] Testing direct HTTP to Supabase:', supabaseUrl);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      const directResponse = await fetch(`${supabaseUrl}/rest/v1/`, {
+        method: 'GET',
+        headers: {
+          'apikey': supabaseKey || '',
+          'Authorization': `Bearer ${supabaseKey || ''}`,
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      
+      results.directHttpTest = {
+        success: true,
+        status: directResponse.status,
+        statusText: directResponse.statusText,
+      };
+    } catch (httpError: any) {
+      results.directHttpTest = {
+        success: false,
+        error: httpError.message,
+        name: httpError.name,
+        cause: httpError.cause?.message || httpError.cause?.code,
+      };
+    }
+    
+    // Test storage endpoint directly
+    try {
+      console.log('[Debug] Testing direct HTTP to Supabase Storage');
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      
+      const storageResponse = await fetch(`${supabaseUrl}/storage/v1/bucket`, {
+        method: 'GET',
+        headers: {
+          'apikey': supabaseKey || '',
+          'Authorization': `Bearer ${supabaseKey || ''}`,
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      
+      results.directStorageTest = {
+        success: true,
+        status: storageResponse.status,
+        statusText: storageResponse.statusText,
+      };
+      
+      if (storageResponse.ok) {
+        const buckets = await storageResponse.json();
+        results.directStorageTest.buckets = buckets;
+      }
+    } catch (storageError: any) {
+      results.directStorageTest = {
+        success: false,
+        error: storageError.message,
+        name: storageError.name,
+        cause: storageError.cause?.message || storageError.cause?.code,
+      };
+    }
+  }
+
   // Get Supabase status
   results.supabaseStatus = getSupabaseStatus();
 
+  // Reset and recreate client to ensure fresh connection
+  resetSupabaseAdmin();
+  
   // Try to get Supabase client
   const supabase = getSupabaseAdmin();
 
