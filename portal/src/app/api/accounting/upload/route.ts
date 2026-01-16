@@ -5,20 +5,8 @@ import ManusTask from '@/models/ManusTask';
 import { requireAuth } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-config';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseAdmin, STORAGE_BUCKET, SUPABASE_STATUS } from '@/lib/supabaseAdmin';
 import manusService from '@/services/manusService';
-
-// Helper function to get Supabase client (created lazily to ensure env vars are available)
-function getSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE;
-  
-  if (!supabaseUrl || !supabaseServiceRole) {
-    throw new Error('Supabase configuration missing. Please check SUPABASE_URL and SUPABASE_SERVICE_ROLE environment variables.');
-  }
-  
-  return createClient(supabaseUrl, supabaseServiceRole);
-}
 
 // POST /api/accounting/upload - Upload accounting document
 export const POST = requireAuth(async (request: NextRequest) => {
@@ -32,6 +20,17 @@ export const POST = requireAuth(async (request: NextRequest) => {
     const year = parseInt(formData.get('year') as string);
     const documentType = formData.get('documentType') as string;
 
+    console.log('Upload request received:', {
+      hasFile: !!file,
+      fileName: file?.name,
+      fileSize: file?.size,
+      fileType: file?.type,
+      company,
+      month,
+      year,
+      documentType,
+    });
+
     // Validation
     if (!file) {
       return NextResponse.json(
@@ -42,40 +41,90 @@ export const POST = requireAuth(async (request: NextRequest) => {
 
     if (!company || !month || !year || !documentType) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Missing required fields', details: { company: !!company, month: !!month, year: !!year, documentType: !!documentType } },
         { status: 400 }
       );
     }
 
     await connectToDatabase();
 
-    // Get Supabase client
-    const supabase = getSupabaseClient();
-    const bucketName = process.env.SUPABASE_BUCKET || 'cadgroup-uploads';
+    // Check Supabase client availability
+    console.log('Supabase status:', SUPABASE_STATUS);
+    
+    if (!supabaseAdmin) {
+      console.error('Supabase admin client not initialized');
+      return NextResponse.json(
+        { error: 'Storage service not configured', details: SUPABASE_STATUS },
+        { status: 503 }
+      );
+    }
+
+    const bucketName = process.env.SUPABASE_BUCKET || STORAGE_BUCKET || 'cadgroup-uploads';
 
     // Upload file to Supabase
-    const fileExt = file.name.split('.').pop();
+    const fileExt = file.name.split('.').pop() || 'pdf';
     const fileName = `accounting/${company}/${year}/${month}/${Date.now()}.${fileExt}`;
     
-    console.log('Uploading to Supabase:', { bucketName, fileName, fileType: file.type, fileSize: file.size });
+    console.log('Preparing Supabase upload:', { bucketName, fileName, fileType: file.type, fileSize: file.size });
     
+    // Convert file to buffer
     const fileBuffer = await file.arrayBuffer();
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from(bucketName)
-      .upload(fileName, fileBuffer, {
-        contentType: file.type,
-        upsert: false,
-      });
+    const uint8Array = new Uint8Array(fileBuffer);
+    
+    console.log('File buffer ready, size:', uint8Array.length);
+    
+    // Upload to Supabase with retry logic
+    let uploadData;
+    let uploadError;
+    let retries = 0;
+    const maxRetries = 2;
+    
+    while (retries <= maxRetries) {
+      try {
+        const result = await supabaseAdmin.storage
+          .from(bucketName)
+          .upload(fileName, uint8Array, {
+            contentType: file.type || 'application/octet-stream',
+            upsert: false,
+          });
+        
+        uploadData = result.data;
+        uploadError = result.error;
+        
+        if (!uploadError) {
+          break;
+        }
+        
+        console.error(`Supabase upload attempt ${retries + 1} failed:`, uploadError);
+        retries++;
+        
+        if (retries <= maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+        }
+      } catch (networkError: any) {
+        console.error(`Supabase upload network error (attempt ${retries + 1}):`, networkError.message);
+        retries++;
+        
+        if (retries <= maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+        } else {
+          throw new Error(`Network error uploading to storage after ${maxRetries + 1} attempts: ${networkError.message}`);
+        }
+      }
+    }
 
     if (uploadError) {
-      console.error('Supabase upload error:', uploadError);
-      throw new Error(`Failed to upload to storage: ${uploadError.message}`);
+      console.error('Supabase upload error after retries:', uploadError);
+      return NextResponse.json(
+        { error: 'Failed to upload to storage', message: uploadError.message, code: (uploadError as any).name },
+        { status: 500 }
+      );
     }
 
     console.log('Supabase upload successful:', uploadData);
 
     // Get public URL
-    const { data: urlData } = supabase.storage
+    const { data: urlData } = supabaseAdmin.storage
       .from(bucketName)
       .getPublicUrl(fileName);
 

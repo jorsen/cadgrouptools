@@ -82,6 +82,10 @@ services:
         sync: false
       - key: SUPABASE_URL
         value: https://cpoeuapfcbwymoftfmsf.supabase.co
+      - key: SUPABASE_ANON_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwb2V1YXBmY2J3eW1vZnRmbXNmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxNDU1NTgsImV4cCI6MjA3MDcyMTU1OH0.IpF_QibaiYPca6r8OGVcENXZN665v9RUDuOvuTYa_aw
+      # IMPORTANT: SUPABASE_SERVICE_ROLE must be set manually in Render dashboard
+      # Get it from Supabase Dashboard > Settings > API > service_role key
       - key: SUPABASE_SERVICE_ROLE
         sync: false
       - key: SUPABASE_BUCKET
