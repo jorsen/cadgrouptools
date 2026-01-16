@@ -8,10 +8,17 @@ import { authOptions } from '@/lib/auth-config';
 import { createClient } from '@supabase/supabase-js';
 import manusService from '@/services/manusService';
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE!
-);
+// Helper function to get Supabase client (created lazily to ensure env vars are available)
+function getSupabaseClient() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceRole = process.env.SUPABASE_SERVICE_ROLE;
+  
+  if (!supabaseUrl || !supabaseServiceRole) {
+    throw new Error('Supabase configuration missing. Please check SUPABASE_URL and SUPABASE_SERVICE_ROLE environment variables.');
+  }
+  
+  return createClient(supabaseUrl, supabaseServiceRole);
+}
 
 // POST /api/accounting/upload - Upload accounting document
 export const POST = requireAuth(async (request: NextRequest) => {
@@ -42,13 +49,19 @@ export const POST = requireAuth(async (request: NextRequest) => {
 
     await connectToDatabase();
 
+    // Get Supabase client
+    const supabase = getSupabaseClient();
+    const bucketName = process.env.SUPABASE_BUCKET || 'cadgroup-uploads';
+
     // Upload file to Supabase
     const fileExt = file.name.split('.').pop();
-    const fileName = `${company}/${year}/${month}/${Date.now()}.${fileExt}`;
+    const fileName = `accounting/${company}/${year}/${month}/${Date.now()}.${fileExt}`;
+    
+    console.log('Uploading to Supabase:', { bucketName, fileName, fileType: file.type, fileSize: file.size });
     
     const fileBuffer = await file.arrayBuffer();
     const { data: uploadData, error: uploadError } = await supabase.storage
-      .from(process.env.SUPABASE_BUCKET || 'cadgroupmgt')
+      .from(bucketName)
       .upload(fileName, fileBuffer, {
         contentType: file.type,
         upsert: false,
@@ -59,9 +72,11 @@ export const POST = requireAuth(async (request: NextRequest) => {
       throw new Error(`Failed to upload to storage: ${uploadError.message}`);
     }
 
+    console.log('Supabase upload successful:', uploadData);
+
     // Get public URL
     const { data: urlData } = supabase.storage
-      .from(process.env.SUPABASE_BUCKET || 'cadgroupmgt')
+      .from(bucketName)
       .getPublicUrl(fileName);
 
     // Check if company already has a persistent Manus task

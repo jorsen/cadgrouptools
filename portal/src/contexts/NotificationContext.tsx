@@ -112,12 +112,16 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     }
   }, [playNotificationSound]);
 
-  // Initialize WebSocket connection
+  // Initialize WebSocket connection only if URL is configured
+  // Skip WebSocket in production if not configured to avoid console errors
+  const wsUrl = process.env.NEXT_PUBLIC_WS_URL;
+  const shouldConnectWs = Boolean(wsUrl && wsUrl !== 'disabled');
+  
   useWebSocket(
-    process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:3001',
+    shouldConnectWs && wsUrl ? wsUrl : '',
     {
       onMessage: handleWebSocketMessage,
-      reconnect: true,
+      reconnect: shouldConnectWs,
       reconnectInterval: 5000,
     }
   );

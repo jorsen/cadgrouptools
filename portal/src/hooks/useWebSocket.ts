@@ -25,11 +25,17 @@ export const useWebSocket = (url: string, options: WebSocketOptions = {}) => {
 
   const ws = useRef<WebSocket | null>(null);
   const reconnectCount = useRef(0);
-  const reconnectTimeout = useRef<NodeJS.Timeout>();
+  const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<MessageEvent | null>(null);
 
   const connect = useCallback(() => {
+    // Skip connection if URL is empty or invalid
+    if (!url || url === '') {
+      console.log('WebSocket URL not configured, skipping connection');
+      return;
+    }
+
     try {
       // Clean up existing connection
       if (ws.current) {
