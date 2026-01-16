@@ -5,7 +5,7 @@ import ManusTask from '@/models/ManusTask';
 import { requireAuth } from '@/lib/auth';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-config';
-import { supabaseAdmin, STORAGE_BUCKET, SUPABASE_STATUS } from '@/lib/supabaseAdmin';
+import { getSupabaseAdmin, STORAGE_BUCKET, getSupabaseStatus } from '@/lib/supabaseAdmin';
 import manusService from '@/services/manusService';
 
 // POST /api/accounting/upload - Upload accounting document
@@ -48,13 +48,15 @@ export const POST = requireAuth(async (request: NextRequest) => {
 
     await connectToDatabase();
 
-    // Check Supabase client availability
-    console.log('Supabase status:', SUPABASE_STATUS);
+    // Get Supabase client (lazy initialization)
+    const supabaseStatus = getSupabaseStatus();
+    console.log('Supabase status:', supabaseStatus);
     
-    if (!supabaseAdmin) {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
       console.error('Supabase admin client not initialized');
       return NextResponse.json(
-        { error: 'Storage service not configured', details: SUPABASE_STATUS },
+        { error: 'Storage service not configured', details: supabaseStatus },
         { status: 503 }
       );
     }
@@ -81,7 +83,7 @@ export const POST = requireAuth(async (request: NextRequest) => {
     
     while (retries <= maxRetries) {
       try {
-        const result = await supabaseAdmin.storage
+        const result = await supabase.storage
           .from(bucketName)
           .upload(fileName, uint8Array, {
             contentType: file.type || 'application/octet-stream',
@@ -124,7 +126,7 @@ export const POST = requireAuth(async (request: NextRequest) => {
     console.log('Supabase upload successful:', uploadData);
 
     // Get public URL
-    const { data: urlData } = supabaseAdmin.storage
+    const { data: urlData } = supabase.storage
       .from(bucketName)
       .getPublicUrl(fileName);
 

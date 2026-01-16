@@ -40,10 +40,12 @@ export default withAuth(
         const pathname = req.nextUrl.pathname;
         
         // Allow public routes
-        if (pathname.startsWith('/auth/') || 
+        if (pathname.startsWith('/auth/') ||
             pathname === '/' ||
             pathname.startsWith('/api/auth/') ||
             pathname === '/api/health/push' ||
+            // Debug endpoints (should be removed in production)
+            pathname.startsWith('/api/debug/') ||
             // Temporarily allow transactions for debugging
             pathname.startsWith('/accounting/transactions') ||
             pathname.startsWith('/api/transactions')) {
