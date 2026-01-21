@@ -8,6 +8,7 @@ import { authOptions } from '@/lib/auth-config';
 import { uploadToGridFS, getGridFSFileUrl } from '@/lib/gridfsStorage';
 import { getSupabaseAdmin, STORAGE_BUCKET, getSupabaseStatus } from '@/lib/supabaseAdmin';
 import manusService from '@/services/manusService';
+import { documentProcessingService } from '@/services/documentProcessingService';
 
 // Storage type for tracking where files are stored
 type StorageType = 'gridfs' | 'supabase';
@@ -251,12 +252,62 @@ export const POST = requireAuth(async (request: NextRequest) => {
       }, { status: 201 });
     }
 
-    // Return success without Manus processing
+    // Fallback: Use Claude for document processing if Manus is not available
+    const isClaudeConfigured = documentProcessingService.isConfigured();
+    console.log('Claude document processing configured:', isClaudeConfigured);
+
+    if (isClaudeConfigured) {
+      try {
+        console.log('Processing document with Claude AI...');
+        accountingDoc.processingStatus = 'processing';
+        await accountingDoc.save();
+
+        // Process the document with Claude
+        const analysisResult = await documentProcessingService.processDocument(
+          buffer,
+          file.name,
+          documentType,
+          company,
+          month,
+          year
+        );
+
+        // Update the document with analysis results
+        accountingDoc.analysisResult = analysisResult;
+        accountingDoc.processingStatus = 'completed';
+        await accountingDoc.save();
+
+        console.log('Claude document processing completed');
+
+        return NextResponse.json({
+          success: true,
+          document: accountingDoc,
+          message: 'Document uploaded and processed with Claude AI',
+          processingMethod: 'claude',
+          storageType,
+        }, { status: 201 });
+
+      } catch (claudeError: any) {
+        console.error('Claude processing failed:', claudeError);
+        accountingDoc.processingStatus = 'failed';
+        accountingDoc.errorMessage = claudeError.message;
+        await accountingDoc.save();
+
+        return NextResponse.json({
+          success: true,
+          document: accountingDoc,
+          warning: 'Document uploaded but AI processing failed. You can retry processing later.',
+          storageType,
+        }, { status: 201 });
+      }
+    }
+
+    // Return success without any AI processing
     return NextResponse.json({
       success: true,
       document: accountingDoc,
-      message: 'Document uploaded to storage. Manus AI processing is not configured.',
-      warning: 'MANUS_API_KEY is not set or invalid. Please configure a valid Manus API token to enable AI processing.',
+      message: 'Document uploaded to storage. AI processing is not configured.',
+      warning: 'Neither MANUS_API_KEY nor ANTHROPIC_API_KEY is configured. Please set up API keys to enable AI processing.',
       storageType,
     }, { status: 201 });
 
