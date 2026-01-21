@@ -41,8 +41,15 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
 
   // Initialize audio for notification sound
   useEffect(() => {
-    audioRef.current = new Audio('/sounds/notification.mp3');
-    audioRef.current.volume = 0.5;
+    try {
+      audioRef.current = new Audio('/sounds/notification.mp3');
+      audioRef.current.volume = 0.5;
+      // Preload the audio to catch 404 errors early
+      audioRef.current.load();
+    } catch (error) {
+      console.warn('Notification sound not available:', error);
+      audioRef.current = null;
+    }
   }, []);
 
   // Play notification sound

@@ -34,15 +34,15 @@ const AccountingDocumentSchema = new Schema(
       required: true,
       index: true
     },
-    manusTaskId: { 
-      type: String, 
-      required: true,
+    manusTaskId: {
+      type: String,
+      required: false,  // Optional - may not have Manus configured
       index: true
     },
     analysisResult: { type: Schema.Types.Mixed },
     processingStatus: {
       type: String,
-      enum: ['uploaded', 'processing', 'completed', 'failed'],
+      enum: ['uploaded', 'stored', 'processing', 'completed', 'failed'],
       default: 'uploaded',
       index: true
     },
