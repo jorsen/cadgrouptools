@@ -41,14 +41,28 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
 
   // Initialize audio for notification sound
   useEffect(() => {
-    try {
-      audioRef.current = new Audio('/sounds/notification.mp3');
-      audioRef.current.volume = 0.5;
-      // Preload the audio to catch 404 errors early
-      audioRef.current.load();
-    } catch (error) {
-      console.warn('Notification sound not available:', error);
-      audioRef.current = null;
+    // Only try to load audio in browser environment
+    if (typeof window !== 'undefined') {
+      try {
+        const audio = new Audio('/sounds/notification.mp3');
+        audio.volume = 0.5;
+        
+        // Handle load errors gracefully
+        audio.addEventListener('error', () => {
+          console.warn('Notification sound file not found - notifications will be silent');
+          audioRef.current = null;
+        });
+        
+        audio.addEventListener('canplaythrough', () => {
+          audioRef.current = audio;
+        });
+        
+        // Try to preload
+        audio.load();
+      } catch (error) {
+        console.warn('Notification sound not available:', error);
+        audioRef.current = null;
+      }
     }
   }, []);
 
