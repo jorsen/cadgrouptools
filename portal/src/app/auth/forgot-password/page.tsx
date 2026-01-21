@@ -134,7 +134,7 @@ function ForgotPasswordForm() {
           }
         }}>
           <DotLottieReact
-            src="https://lottie.host/fcbdc283-b587-4121-9559-d00108d5b5f3/i4iQt5jVEf.lottie"
+            src="https://lottie.host/4db68bbd-31f6-4cd8-84eb-189de081159a/IGmMCqhzpt.lottie"
             loop
             autoplay
             style={{ width: '100%', height: '100%' }}

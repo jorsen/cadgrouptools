@@ -22,13 +22,22 @@ class ManusService {
   private client: AxiosInstance;
   private apiKey: string;
   private webhookSecret: string;
+  private isConfigured: boolean;
 
   constructor() {
     this.apiKey = process.env.MANUS_API_KEY || '';
     this.webhookSecret = process.env.MANUS_WEBHOOK_SECRET || '';
+    this.isConfigured = false;
     
     if (!this.apiKey) {
       console.warn('MANUS_API_KEY not set - Manus AI integration will not work');
+    } else {
+      // Validate API key format - Manus expects either a JWT token (3 segments) or an API key
+      const segments = this.apiKey.split('.');
+      if (segments.length !== 3 && !this.apiKey.startsWith('sk-')) {
+        console.warn('MANUS_API_KEY format may be invalid. Expected JWT token (3 segments) or API key starting with "sk-"');
+      }
+      this.isConfigured = true;
     }
 
     this.client = axios.create({
@@ -39,6 +48,13 @@ class ManusService {
       },
       timeout: 30000, // 30 seconds
     });
+  }
+
+  /**
+   * Check if Manus service is properly configured
+   */
+  isServiceConfigured(): boolean {
+    return this.isConfigured && !!this.apiKey;
   }
 
   /**
@@ -70,13 +86,18 @@ class ManusService {
    * Upload a file to an existing Manus task
    */
   async uploadFileToTask(
-    taskId: string, 
-    fileBuffer: Buffer, 
+    taskId: string,
+    fileBuffer: Buffer,
     options: UploadFileOptions
   ): Promise<{ success: boolean; fileId?: string }> {
     try {
       const formData = new FormData();
-      const blob = new Blob([fileBuffer], { type: options.contentType });
+      // Convert Buffer to ArrayBuffer then to Blob for compatibility
+      const arrayBuffer = fileBuffer.buffer.slice(
+        fileBuffer.byteOffset,
+        fileBuffer.byteOffset + fileBuffer.byteLength
+      ) as ArrayBuffer;
+      const blob = new Blob([arrayBuffer], { type: options.contentType });
       formData.append('file', blob, options.filename);
 
       const response = await this.client.post(

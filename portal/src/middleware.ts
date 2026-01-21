@@ -23,7 +23,7 @@ export default withAuth(
       '/settings/users',
     ];
     
-    const isAdminRoute = adminOnlyPaths.some(path => 
+    const isAdminRoute = adminOnlyPaths.some(path =>
       pathname.startsWith(path)
     );
     
@@ -50,7 +50,13 @@ export default withAuth(
             pathname.startsWith('/api/files/gridfs/') ||
             // Temporarily allow transactions for debugging
             pathname.startsWith('/accounting/transactions') ||
-            pathname.startsWith('/api/transactions')) {
+            pathname.startsWith('/api/transactions') ||
+            // Public static files
+            pathname === '/manifest.json' ||
+            pathname === '/sw.js' ||
+            pathname.endsWith('.png') ||
+            pathname.endsWith('.ico') ||
+            pathname.endsWith('.svg')) {
           return true;
         }
         
@@ -79,10 +85,10 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
-     * - public folder
+     * - public folder files (manifest.json, sw.js, icons)
      * - api/auth (authentication endpoints)
      * - auth pages (signin, signup, etc.)
      */
-    '/((?!_next/static|_next/image|favicon.ico|public|api/auth|auth).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|icon-.*\\.png|badge-.*\\.png|api/auth|auth).*)',
   ],
 };

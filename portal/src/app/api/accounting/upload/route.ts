@@ -150,35 +150,49 @@ export const POST = requireAuth(async (request: NextRequest) => {
       }
     }
 
-    // Check if company already has a persistent Manus task
-    let existingManusTask = await ManusTask.findOne({
-      taskType: 'accounting',
-      company,
-      status: { $ne: 'failed' },
-    }).sort({ createdAt: -1 });
+    // Check if Manus service is configured
+    const isManusConfigured = manusService.isServiceConfigured();
+    console.log('Manus service configured:', isManusConfigured);
 
-    let manusTaskId: string;
+    let existingManusTask: any = null;
+    let manusTaskId: string | null = null;
 
-    if (existingManusTask) {
-      manusTaskId = existingManusTask.manusTaskId;
-      console.log(`Using existing Manus task for ${company}:`, manusTaskId);
-    } else {
-      // Create new persistent task for this company
-      const manusTask = await manusService.createAccountingTask(company);
-      manusTaskId = manusTask.id;
-
-      existingManusTask = await ManusTask.create({
-        manusTaskId,
+    if (isManusConfigured) {
+      // Check if company already has a persistent Manus task
+      existingManusTask = await ManusTask.findOne({
         taskType: 'accounting',
         company,
-        status: 'pending',
-        inputData: {
-          company,
-          createdAt: new Date().toISOString(),
-        },
-      });
+        status: { $ne: 'failed' },
+      }).sort({ createdAt: -1 });
 
-      console.log(`Created new Manus task for ${company}:`, manusTaskId);
+      if (existingManusTask) {
+        manusTaskId = existingManusTask.manusTaskId;
+        console.log(`Using existing Manus task for ${company}:`, manusTaskId);
+      } else {
+        try {
+          // Create new persistent task for this company
+          const manusTask = await manusService.createAccountingTask(company);
+          manusTaskId = manusTask.id;
+
+          existingManusTask = await ManusTask.create({
+            manusTaskId,
+            taskType: 'accounting',
+            company,
+            status: 'pending',
+            inputData: {
+              company,
+              createdAt: new Date().toISOString(),
+            },
+          });
+
+          console.log(`Created new Manus task for ${company}:`, manusTaskId);
+        } catch (manusCreateError: any) {
+          console.error('Failed to create Manus task:', manusCreateError.message);
+          // Continue without Manus - file is still stored
+        }
+      }
+    } else {
+      console.warn('Manus service not configured - skipping AI processing');
     }
 
     // Create AccountingDocument record
@@ -192,46 +206,57 @@ export const POST = requireAuth(async (request: NextRequest) => {
       gridfsFileId: gridfsFileId,
       storageType: storageType,
       uploadedBy: session?.user?.id,
-      manusTaskId,
-      processingStatus: 'uploaded',
+      manusTaskId: manusTaskId || undefined,
+      processingStatus: manusTaskId ? 'uploaded' : 'stored',
     });
 
-    // Upload file to Manus task
-    try {
-      await manusService.uploadFileToTask(manusTaskId, buffer, {
-        filename: file.name,
-        contentType: file.type,
-      });
+    // Upload file to Manus task (only if Manus is configured and task was created)
+    if (manusTaskId && existingManusTask) {
+      try {
+        await manusService.uploadFileToTask(manusTaskId, buffer, {
+          filename: file.name,
+          contentType: file.type,
+        });
 
-      accountingDoc.processingStatus = 'processing';
-      await accountingDoc.save();
+        accountingDoc.processingStatus = 'processing';
+        await accountingDoc.save();
 
-      existingManusTask.status = 'processing';
-      existingManusTask.accountingUploadId = accountingDoc._id;
-      await existingManusTask.save();
+        existingManusTask.status = 'processing';
+        existingManusTask.accountingUploadId = accountingDoc._id;
+        await existingManusTask.save();
 
-      console.log(`Uploaded file to Manus task ${manusTaskId}`);
-    } catch (manusError: any) {
-      console.error('Error uploading to Manus:', manusError);
-      accountingDoc.processingStatus = 'failed';
-      accountingDoc.errorMessage = manusError.message;
-      await accountingDoc.save();
+        console.log(`Uploaded file to Manus task ${manusTaskId}`);
+      } catch (manusError: any) {
+        console.error('Error uploading to Manus:', manusError);
+        accountingDoc.processingStatus = 'failed';
+        accountingDoc.errorMessage = manusError.message;
+        await accountingDoc.save();
 
-      // Still return success since file is stored - Manus can be retried
+        // Still return success since file is stored - Manus can be retried
+        return NextResponse.json({
+          success: true,
+          document: accountingDoc,
+          manusTaskId,
+          warning: 'Document uploaded to storage but failed to send to Manus AI. Processing can be retried.',
+          storageType,
+        }, { status: 201 });
+      }
+
       return NextResponse.json({
         success: true,
         document: accountingDoc,
         manusTaskId,
-        warning: 'Document uploaded to storage but failed to send to Manus AI. Processing can be retried.',
+        message: 'Document uploaded and sent to Manus AI for processing',
         storageType,
       }, { status: 201 });
     }
 
+    // Return success without Manus processing
     return NextResponse.json({
       success: true,
       document: accountingDoc,
-      manusTaskId,
-      message: 'Document uploaded and sent to Manus AI for processing',
+      message: 'Document uploaded to storage. Manus AI processing is not configured.',
+      warning: 'MANUS_API_KEY is not set or invalid. Please configure a valid Manus API token to enable AI processing.',
       storageType,
     }, { status: 201 });
 
