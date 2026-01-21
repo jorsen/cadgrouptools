@@ -23,6 +23,7 @@ import {
   RiseOutlined,
   FallOutlined,
   PlusOutlined,
+  SyncOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { motion } from 'framer-motion';
@@ -76,6 +77,7 @@ export default function CompanyAccountingPage() {
   const [documents, setDocuments] = useState<AccountingDoc[]>([]);
   const [plStatements, setPLStatements] = useState<PLStatement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reprocessing, setReprocessing] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
@@ -104,6 +106,37 @@ export default function CompanyAccountingPage() {
       setLoading(false);
     }
   };
+
+  const reprocessDocuments = async () => {
+    setReprocessing(true);
+    try {
+      const response = await fetch('/api/accounting/reprocess', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to reprocess documents');
+      }
+
+      message.success(`Processed ${data.processed} documents successfully`);
+      
+      // Refresh data to show updated P&L statements
+      await fetchData();
+    } catch (error: any) {
+      message.error(error.message || 'Failed to reprocess documents');
+    } finally {
+      setReprocessing(false);
+    }
+  };
+
+  // Check if there are documents that need reprocessing
+  const pendingDocuments = documents.filter(
+    d => ['stored', 'uploaded', 'failed'].includes(d.processingStatus)
+  );
 
   const documentColumns: ColumnsType<AccountingDoc> = [
     {
@@ -201,6 +234,17 @@ export default function CompanyAccountingPage() {
             >
               Refresh
             </Button>
+            {pendingDocuments.length > 0 && (
+              <Button
+                icon={<SyncOutlined spin={reprocessing} />}
+                onClick={reprocessDocuments}
+                loading={reprocessing}
+                size="large"
+                style={{ borderRadius: '24px' }}
+              >
+                Process {pendingDocuments.length} Document{pendingDocuments.length > 1 ? 's' : ''}
+              </Button>
+            )}
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -283,8 +327,16 @@ export default function CompanyAccountingPage() {
               {plStatements.length === 0 ? (
                 <EmptyState
                   title="No P&L statements yet"
-                  description="P&L statements are generated automatically after documents are processed by Manus AI"
+                  description={pendingDocuments.length > 0
+                    ? `You have ${pendingDocuments.length} document(s) waiting to be processed. Click the button below to generate P&L statements.`
+                    : "Upload documents and they will be automatically processed to generate P&L statements."
+                  }
                   type="documents"
+                  action={pendingDocuments.length > 0 ? {
+                    text: `Process ${pendingDocuments.length} Document${pendingDocuments.length > 1 ? 's' : ''}`,
+                    onClick: reprocessDocuments,
+                    icon: <SyncOutlined spin={reprocessing} />,
+                  } : undefined}
                 />
               ) : (
                 <div className="space-y-4">

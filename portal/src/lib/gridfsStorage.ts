@@ -104,6 +104,27 @@ export async function getFileInfo(fileId: string): Promise<any> {
   return files[0] || null;
 }
 
+// Get file from GridFS with buffer and metadata
+export async function getFileFromGridFS(fileId: string): Promise<{ buffer: Buffer; filename: string; metadata: any } | null> {
+  try {
+    const fileInfo = await getFileInfo(fileId);
+    if (!fileInfo) {
+      return null;
+    }
+
+    const buffer = await downloadFromGridFS(fileId);
+    
+    return {
+      buffer,
+      filename: fileInfo.filename || 'document.pdf',
+      metadata: fileInfo.metadata || {},
+    };
+  } catch (error) {
+    console.error('[GridFS] Error getting file:', error);
+    return null;
+  }
+}
+
 // Generate a URL for accessing the file (via API route)
 export function getGridFSFileUrl(fileId: string): string {
   return `/api/files/gridfs/${fileId}`;

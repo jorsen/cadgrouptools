@@ -26,9 +26,15 @@ const AccountingDocumentSchema = new Schema(
       enum: ['bank_statement', 'invoice', 'receipt', 'other'],
       default: 'bank_statement'
     },
-    supabasePath: { type: String, required: true },
-    supabaseUrl: { type: String, required: true },
-    uploadedBy: { 
+    supabasePath: { type: String, required: false },  // Optional - may use GridFS instead
+    supabaseUrl: { type: String, required: false },   // Optional - may use GridFS instead
+    gridfsFileId: { type: String, required: false },  // GridFS file ID
+    storageType: {
+      type: String,
+      enum: ['gridfs', 'supabase'],
+      default: 'gridfs'
+    },
+    uploadedBy: {
       type: Schema.Types.ObjectId, 
       ref: 'User', 
       required: true,
