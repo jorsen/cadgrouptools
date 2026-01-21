@@ -4,11 +4,12 @@ import AccountingDocument from '@/models/AccountingDocument';
 import { requireAuth } from '@/lib/auth';
 
 // GET /api/accounting/[company] - Get all accounting data for a company
-export const GET = requireAuth(async (request: NextRequest, { params }: { params: { company: string } }) => {
+export const GET = requireAuth(async (request: NextRequest, context: { params: Promise<{ company: string }> }) => {
   try {
     await connectToDatabase();
 
-    const { company } = params;
+    // In Next.js 15+, params is a Promise that needs to be awaited
+    const { company } = await context.params;
 
     // Fetch all documents for this company
     const documents = await AccountingDocument.find({ company })
@@ -53,6 +54,7 @@ export const GET = requireAuth(async (request: NextRequest, { params }: { params
         totalDocuments: documents.length,
         processed: documents.filter((d: any) => d.processingStatus === 'completed').length,
         processing: documents.filter((d: any) => d.processingStatus === 'processing').length,
+        stored: documents.filter((d: any) => d.processingStatus === 'stored' || d.processingStatus === 'uploaded').length,
         failed: documents.filter((d: any) => d.processingStatus === 'failed').length,
       },
     });

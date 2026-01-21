@@ -32,18 +32,31 @@ class ManusService {
     if (!this.apiKey) {
       console.warn('MANUS_API_KEY not set - Manus AI integration will not work');
     } else {
-      // Validate API key format - Manus expects either a JWT token (3 segments) or an API key
+      // Validate API key format
       const segments = this.apiKey.split('.');
-      if (segments.length !== 3 && !this.apiKey.startsWith('sk-')) {
+      const isJWT = segments.length === 3;
+      const isAPIKey = this.apiKey.startsWith('sk-');
+      
+      if (!isJWT && !isAPIKey) {
         console.warn('MANUS_API_KEY format may be invalid. Expected JWT token (3 segments) or API key starting with "sk-"');
       }
+      
+      console.log('Manus API key format:', isJWT ? 'JWT' : (isAPIKey ? 'API Key' : 'Unknown'));
       this.isConfigured = true;
     }
 
+    // Determine the correct authorization header format
+    // Some APIs use "Bearer" for JWT tokens and "X-API-Key" for API keys
+    const isAPIKey = this.apiKey.startsWith('sk-');
+    
     this.client = axios.create({
       baseURL: process.env.MANUS_BASE_URL || 'https://api.manus.ai/v1',
       headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
+        // Try X-API-Key header for API key format, Bearer for JWT
+        ...(isAPIKey
+          ? { 'X-API-Key': this.apiKey }
+          : { 'Authorization': `Bearer ${this.apiKey}` }
+        ),
         'Content-Type': 'application/json',
       },
       timeout: 30000, // 30 seconds

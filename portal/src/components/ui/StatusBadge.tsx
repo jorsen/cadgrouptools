@@ -11,13 +11,13 @@ import {
 import { motion } from 'framer-motion';
 
 interface StatusBadgeProps {
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'draft' | 'sent' | 'finalized';
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'draft' | 'sent' | 'finalized' | 'uploaded' | 'stored';
   size?: 'small' | 'default' | 'large';
   showIcon?: boolean;
   animated?: boolean;
 }
 
-const statusConfig = {
+const statusConfig: Record<string, { color: string; bg: string; darkBg: string; text: string; icon: React.ReactNode }> = {
   pending: {
     color: '#F59E0B',
     bg: '#FEF3C7',
@@ -67,6 +67,29 @@ const statusConfig = {
     text: 'Finalized',
     icon: <CheckCircleOutlined />,
   },
+  uploaded: {
+    color: '#8B5CF6',
+    bg: '#EDE9FE',
+    darkBg: '#4C1D95',
+    text: 'Uploaded',
+    icon: <ClockCircleOutlined />,
+  },
+  stored: {
+    color: '#6366F1',
+    bg: '#E0E7FF',
+    darkBg: '#3730A3',
+    text: 'Stored',
+    icon: <CheckCircleOutlined />,
+  },
+};
+
+// Default fallback config for unknown statuses
+const defaultConfig = {
+  color: '#6B7280',
+  bg: '#F3F4F6',
+  darkBg: '#374151',
+  text: 'Unknown',
+  icon: <ExclamationCircleOutlined />,
 };
 
 export default function StatusBadge({
@@ -75,7 +98,8 @@ export default function StatusBadge({
   showIcon = true,
   animated = true,
 }: StatusBadgeProps) {
-  const config = statusConfig[status];
+  // Use fallback config if status is not found
+  const config = statusConfig[status] || defaultConfig;
   
   const sizeStyles = {
     small: { padding: '2px 8px', fontSize: '12px' },
