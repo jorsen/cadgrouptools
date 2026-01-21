@@ -6,6 +6,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth-config';
 import { getFileFromGridFS } from '@/lib/gridfsStorage';
 import { documentProcessingService } from '@/services/documentProcessingService';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 // POST /api/accounting/reprocess - Reprocess documents that are in stored/failed status
 export const POST = requireAuth(async (request: NextRequest) => {
@@ -62,24 +63,82 @@ export const POST = requireAuth(async (request: NextRequest) => {
     for (const doc of documents) {
       try {
         console.log(`Reprocessing document ${doc._id}...`);
+        console.log(`Document details:`, {
+          gridfsFileId: doc.gridfsFileId,
+          supabasePath: doc.supabasePath,
+          supabaseUrl: doc.supabaseUrl,
+          storageType: doc.storageType,
+        });
 
-        // Get the file from GridFS
+        // Get the file from storage
         let fileBuffer: Buffer | null = null;
         let filename = 'document.pdf';
 
+        // Try GridFS first
         if (doc.gridfsFileId) {
-          const gridfsFile = await getFileFromGridFS(doc.gridfsFileId);
-          if (gridfsFile) {
-            fileBuffer = gridfsFile.buffer;
-            filename = gridfsFile.filename || filename;
+          console.log(`Trying to fetch from GridFS: ${doc.gridfsFileId}`);
+          try {
+            const gridfsFile = await getFileFromGridFS(doc.gridfsFileId);
+            if (gridfsFile) {
+              fileBuffer = gridfsFile.buffer;
+              filename = gridfsFile.filename || filename;
+              console.log(`Successfully retrieved from GridFS, size: ${fileBuffer.length}`);
+            }
+          } catch (gridfsError: any) {
+            console.error(`GridFS fetch failed:`, gridfsError.message);
+          }
+        }
+
+        // Fallback to Supabase if GridFS didn't work
+        if (!fileBuffer && doc.supabaseUrl) {
+          console.log(`Trying to fetch from Supabase URL: ${doc.supabaseUrl}`);
+          try {
+            const response = await fetch(doc.supabaseUrl);
+            if (response.ok) {
+              const arrayBuffer = await response.arrayBuffer();
+              fileBuffer = Buffer.from(arrayBuffer);
+              // Extract filename from URL or path
+              filename = doc.supabasePath?.split('/').pop() || 'document.pdf';
+              console.log(`Successfully retrieved from Supabase, size: ${fileBuffer.length}`);
+            } else {
+              console.error(`Supabase fetch failed: ${response.status} ${response.statusText}`);
+            }
+          } catch (supabaseError: any) {
+            console.error(`Supabase fetch error:`, supabaseError.message);
+          }
+        }
+
+        // Try Supabase storage API as last resort
+        if (!fileBuffer && doc.supabasePath) {
+          console.log(`Trying Supabase storage API for path: ${doc.supabasePath}`);
+          try {
+            const supabase = getSupabaseAdmin();
+            if (supabase) {
+              const bucketName = process.env.SUPABASE_BUCKET || 'cadgroup-uploads';
+              const { data, error } = await supabase.storage
+                .from(bucketName)
+                .download(doc.supabasePath);
+              
+              if (data && !error) {
+                const arrayBuffer = await data.arrayBuffer();
+                fileBuffer = Buffer.from(arrayBuffer);
+                filename = doc.supabasePath.split('/').pop() || 'document.pdf';
+                console.log(`Successfully retrieved from Supabase storage API, size: ${fileBuffer.length}`);
+              } else if (error) {
+                console.error(`Supabase storage API error:`, error.message);
+              }
+            }
+          } catch (storageError: any) {
+            console.error(`Supabase storage error:`, storageError.message);
           }
         }
 
         if (!fileBuffer) {
+          console.error(`Could not retrieve file for document ${doc._id} from any storage`);
           results.push({
             documentId: doc._id,
             status: 'error',
-            error: 'Could not retrieve file from storage',
+            error: 'Could not retrieve file from storage. File may have been deleted or storage is not accessible.',
           });
           continue;
         }

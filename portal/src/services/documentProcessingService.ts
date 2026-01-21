@@ -30,17 +30,24 @@ interface DocumentAnalysisResult {
 
 class DocumentProcessingService {
   private client: Anthropic | null = null;
-  private apiKey: string;
+  private apiKey: string = '';
 
   constructor() {
+    this.initializeClient();
+  }
+
+  private initializeClient() {
+    // Re-read the API key in case it was set after initial load
     this.apiKey = process.env.ANTHROPIC_API_KEY || '';
     
-    if (this.apiKey) {
+    if (this.apiKey && !this.client) {
+      console.log('[DocumentProcessingService] Initializing Anthropic client...');
       this.client = new Anthropic({
         apiKey: this.apiKey,
       });
-    } else {
-      console.warn('ANTHROPIC_API_KEY not set - Document processing will not work');
+      console.log('[DocumentProcessingService] Anthropic client initialized successfully');
+    } else if (!this.apiKey) {
+      console.warn('[DocumentProcessingService] ANTHROPIC_API_KEY not set - Document processing will not work');
     }
   }
 
@@ -48,7 +55,24 @@ class DocumentProcessingService {
    * Check if the service is configured
    */
   isConfigured(): boolean {
+    // Try to reinitialize if not configured
+    if (!this.apiKey || !this.client) {
+      this.initializeClient();
+    }
     return !!this.apiKey && !!this.client;
+  }
+
+  /**
+   * Ensure client is ready before processing
+   */
+  private ensureClient(): Anthropic {
+    if (!this.client) {
+      this.initializeClient();
+    }
+    if (!this.client) {
+      throw new Error('Document processing service not configured - ANTHROPIC_API_KEY missing');
+    }
+    return this.client;
   }
 
   /**
@@ -62,9 +86,11 @@ class DocumentProcessingService {
     month: string,
     year: number
   ): Promise<DocumentAnalysisResult> {
-    if (!this.client) {
-      throw new Error('Document processing service not configured - ANTHROPIC_API_KEY missing');
-    }
+    const client = this.ensureClient();
+    
+    console.log(`[DocumentProcessingService] Processing document: ${filename}`);
+    console.log(`[DocumentProcessingService] File size: ${fileBuffer.length} bytes`);
+    console.log(`[DocumentProcessingService] Document type: ${documentType}, Company: ${company}, Period: ${month} ${year}`);
 
     try {
       // Convert file to base64
@@ -158,7 +184,8 @@ Please return ONLY the JSON object with the analysis results.`;
         });
       }
 
-      const response = await this.client.messages.create({
+      console.log('[DocumentProcessingService] Calling Claude API...');
+      const response = await client.messages.create({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 4096,
         messages: [
@@ -169,6 +196,7 @@ Please return ONLY the JSON object with the analysis results.`;
         ],
         system: systemPrompt,
       });
+      console.log('[DocumentProcessingService] Claude API response received');
 
       // Extract the response text
       const responseText = response.content[0];
@@ -203,26 +231,15 @@ Please return ONLY the JSON object with the analysis results.`;
       };
 
     } catch (error: any) {
-      console.error('Error processing document with Claude:', error);
+      console.error('[DocumentProcessingService] Error processing document with Claude:', error);
+      console.error('[DocumentProcessingService] Error details:', {
+        message: error.message,
+        status: error.status,
+        code: error.code,
+      });
       
-      // Return a default result with error info
-      return {
-        documentType,
-        transactions: [],
-        summary: {
-          totalDebits: 0,
-          totalCredits: 0,
-          transactionCount: 0,
-        },
-        plStatement: {
-          totalRevenue: 0,
-          totalExpenses: 0,
-          netIncome: 0,
-          categories: {},
-        },
-        insights: [`Document processing failed: ${error.message}`],
-        extractedAt: new Date(),
-      };
+      // Re-throw the error so the caller can handle it properly
+      throw new Error(`Claude API error: ${error.message || 'Unknown error'}`);
     }
   }
 
