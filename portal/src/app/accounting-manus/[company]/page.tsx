@@ -110,6 +110,8 @@ export default function CompanyAccountingPage() {
   const reprocessDocuments = async () => {
     setReprocessing(true);
     try {
+      console.log('Starting document reprocessing for company:', company);
+      
       const response = await fetch('/api/accounting/reprocess', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -117,16 +119,28 @@ export default function CompanyAccountingPage() {
       });
 
       const data = await response.json();
+      console.log('Reprocess response:', data);
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to reprocess documents');
+        console.error('Reprocess failed:', data);
+        throw new Error(data.error || data.message || 'Failed to reprocess documents');
       }
 
-      message.success(`Processed ${data.processed} documents successfully`);
+      if (data.failed > 0) {
+        // Show details about failures
+        const failedDocs = data.results?.filter((r: any) => r.status === 'error') || [];
+        const errorMessages = failedDocs.map((r: any) => r.error).join(', ');
+        message.warning(`Processed ${data.processed} documents. ${data.failed} failed: ${errorMessages}`);
+      } else if (data.processed > 0) {
+        message.success(`Processed ${data.processed} documents successfully`);
+      } else {
+        message.info(data.message || 'No documents to process');
+      }
       
       // Refresh data to show updated P&L statements
       await fetchData();
     } catch (error: any) {
+      console.error('Reprocess error:', error);
       message.error(error.message || 'Failed to reprocess documents');
     } finally {
       setReprocessing(false);
