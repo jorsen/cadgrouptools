@@ -176,15 +176,11 @@ Please return ONLY the JSON object with the analysis results. Make sure plStatem
 
       // Call Claude API with the document
       // Build the content array based on file type
-      const contentParts: any[] = [
-        {
-          type: 'text',
-          text: userPrompt,
-        },
-      ];
+      const contentParts: any[] = [];
 
-      // For PDFs, use document type; for images, use image type
+      // For PDFs, use the file block type with base64 source
       if (filename.toLowerCase().endsWith('.pdf')) {
+        console.log('[DocumentProcessingService] Processing PDF document');
         contentParts.push({
           type: 'document',
           source: {
@@ -195,6 +191,7 @@ Please return ONLY the JSON object with the analysis results. Make sure plStatem
         });
       } else {
         // For images (png, jpg, etc.)
+        console.log('[DocumentProcessingService] Processing image document');
         const imageMimeType = filename.toLowerCase().endsWith('.png') ? 'image/png' :
                               filename.toLowerCase().endsWith('.jpg') || filename.toLowerCase().endsWith('.jpeg') ? 'image/jpeg' :
                               filename.toLowerCase().endsWith('.gif') ? 'image/gif' :
@@ -210,10 +207,20 @@ Please return ONLY the JSON object with the analysis results. Make sure plStatem
         });
       }
 
+      // Add the text prompt after the document
+      contentParts.push({
+        type: 'text',
+        text: userPrompt,
+      });
+
       console.log('[DocumentProcessingService] Calling Claude API...');
+      console.log('[DocumentProcessingService] Content parts:', contentParts.length, 'parts');
+      console.log('[DocumentProcessingService] First part type:', contentParts[0]?.type);
+      console.log('[DocumentProcessingService] Second part type:', contentParts[1]?.type);
+      
       const response = await client.messages.create({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
+        max_tokens: 8192,
         messages: [
           {
             role: 'user',
