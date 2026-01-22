@@ -138,7 +138,7 @@ export const POST = requireAuth(async (request: NextRequest) => {
           results.push({
             documentId: doc._id,
             status: 'error',
-            error: 'Could not retrieve file from storage. File may have been deleted or storage is not accessible.',
+            error: `Could not retrieve file from storage. gridfsFileId: ${doc.gridfsFileId || 'none'}, supabasePath: ${doc.supabasePath || 'none'}, supabaseUrl: ${doc.supabaseUrl ? 'set' : 'none'}`,
           });
           continue;
         }

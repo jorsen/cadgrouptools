@@ -24,6 +24,9 @@ import {
   FallOutlined,
   PlusOutlined,
   SyncOutlined,
+  DeleteOutlined,
+  WarningOutlined,
+  CheckCircleOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { motion } from 'framer-motion';
@@ -42,8 +45,12 @@ interface AccountingDoc {
   year: number;
   documentType: string;
   supabaseUrl: string;
+  supabasePath?: string;
+  gridfsFileId?: string;
+  storageType?: string;
   processingStatus: string;
   analysisResult?: any;
+  errorMessage?: string;
   createdAt: string;
 }
 
@@ -152,6 +159,30 @@ export default function CompanyAccountingPage() {
     d => ['stored', 'uploaded', 'failed'].includes(d.processingStatus)
   );
 
+  // Check if document has accessible file
+  const hasAccessibleFile = (doc: AccountingDoc) => {
+    return !!(doc.gridfsFileId || doc.supabasePath || doc.supabaseUrl);
+  };
+
+  // Delete a document
+  const deleteDocument = async (docId: string) => {
+    try {
+      const response = await fetch(`/api/accounting/documents/${docId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        message.success('Document deleted');
+        await fetchData();
+      } else {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete document');
+      }
+    } catch (error: any) {
+      message.error(error.message || 'Failed to delete document');
+    }
+  };
+
   const documentColumns: ColumnsType<AccountingDoc> = [
     {
       title: 'Period',
@@ -176,6 +207,22 @@ export default function CompanyAccountingPage() {
       render: (status: string) => <StatusBadge status={status as any} size="small" />,
     },
     {
+      title: 'File',
+      key: 'file',
+      render: (_, record) => {
+        const hasFile = hasAccessibleFile(record);
+        return hasFile ? (
+          <span style={{ color: 'var(--color-success)' }}>
+            <CheckCircleOutlined /> Available
+          </span>
+        ) : (
+          <span style={{ color: 'var(--color-error)' }}>
+            <WarningOutlined /> Missing
+          </span>
+        );
+      },
+    },
+    {
       title: 'Uploaded',
       dataIndex: 'createdAt',
       key: 'createdAt',
@@ -185,14 +232,30 @@ export default function CompanyAccountingPage() {
       title: 'Actions',
       key: 'actions',
       render: (_, record) => (
-        <Button
-          type="link"
-          icon={<DownloadOutlined />}
-          href={record.supabaseUrl}
-          target="_blank"
-        >
-          Download
-        </Button>
+        <Space>
+          {hasAccessibleFile(record) && record.supabaseUrl && (
+            <Button
+              type="link"
+              icon={<DownloadOutlined />}
+              href={record.supabaseUrl}
+              target="_blank"
+              size="small"
+            >
+              Download
+            </Button>
+          )}
+          {!hasAccessibleFile(record) && (
+            <Button
+              type="link"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => deleteDocument(record._id)}
+              size="small"
+            >
+              Delete
+            </Button>
+          )}
+        </Space>
       ),
     },
   ];
