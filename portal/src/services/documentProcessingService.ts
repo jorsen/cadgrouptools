@@ -178,9 +178,16 @@ Please return ONLY the JSON object with the analysis results. Make sure plStatem
       // Build the content array based on file type
       const contentParts: any[] = [];
 
-      // For PDFs, use the file block type with base64 source
-      if (filename.toLowerCase().endsWith('.pdf')) {
+      // Determine file type and add appropriate content
+      const isPDF = filename.toLowerCase().endsWith('.pdf');
+      
+      if (isPDF) {
         console.log('[DocumentProcessingService] Processing PDF document');
+        console.log('[DocumentProcessingService] Base64 content length:', base64Content.length);
+        console.log('[DocumentProcessingService] Base64 preview (first 100 chars):', base64Content.substring(0, 100));
+        
+        // Use the file content type for PDFs
+        // According to Anthropic docs, PDFs should use type: "document" with source type "base64"
         contentParts.push({
           type: 'document',
           source: {
@@ -212,13 +219,18 @@ Please return ONLY the JSON object with the analysis results. Make sure plStatem
         type: 'text',
         text: userPrompt,
       });
+      
+      console.log('[DocumentProcessingService] Content parts prepared:', contentParts.length);
+      console.log('[DocumentProcessingService] Content types:', contentParts.map(p => p.type));
 
       console.log('[DocumentProcessingService] Calling Claude API...');
       console.log('[DocumentProcessingService] Content parts:', contentParts.length, 'parts');
       console.log('[DocumentProcessingService] First part type:', contentParts[0]?.type);
       console.log('[DocumentProcessingService] Second part type:', contentParts[1]?.type);
       
-      const response = await client.messages.create({
+      // Use the messages API with PDF support
+      // Note: PDF support may require specific beta headers
+      const requestParams: any = {
         model: 'claude-sonnet-4-20250514',
         max_tokens: 8192,
         messages: [
@@ -228,7 +240,14 @@ Please return ONLY the JSON object with the analysis results. Make sure plStatem
           },
         ],
         system: systemPrompt,
-      });
+      };
+      
+      // Add PDF beta if processing a PDF
+      if (isPDF) {
+        requestParams.betas = ['pdfs-2024-09-25'];
+      }
+      
+      const response = await client.messages.create(requestParams);
       console.log('[DocumentProcessingService] Claude API response received');
       console.log('[DocumentProcessingService] Response usage:', response.usage);
       console.log('[DocumentProcessingService] Response stop_reason:', response.stop_reason);
@@ -368,9 +387,12 @@ Please return ONLY the JSON object with the analysis results. Make sure plStatem
         plStatement: plStatement,
         insights: analysisResult.insights || [],
         extractedAt: new Date(),
+        // Store Claude's raw response for debugging (truncated)
+        claudeResponse: responseText.text.substring(0, 2000),
       };
 
       console.log('[DocumentProcessingService] Final P&L result:', JSON.stringify(finalResult.plStatement, null, 2));
+      console.log('[DocumentProcessingService] Claude raw response (first 500 chars):', responseText.text.substring(0, 500));
       
       return finalResult;
 
