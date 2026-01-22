@@ -258,7 +258,16 @@ export const POST = requireAuth(async (request: NextRequest) => {
 
     if (isClaudeConfigured) {
       try {
-        console.log('Processing document with Claude AI...');
+        console.log('========== Processing document with Claude AI ==========');
+        console.log('Document details:', {
+          filename: file.name,
+          size: buffer.length,
+          documentType,
+          company,
+          month,
+          year,
+        });
+        
         accountingDoc.processingStatus = 'processing';
         await accountingDoc.save();
 
@@ -272,12 +281,19 @@ export const POST = requireAuth(async (request: NextRequest) => {
           year
         );
 
+        console.log('========== Claude processing result ==========');
+        console.log('P&L Statement:', JSON.stringify(analysisResult.plStatement, null, 2));
+        console.log('Transaction count:', analysisResult.transactions?.length || 0);
+        console.log('Summary:', JSON.stringify(analysisResult.summary, null, 2));
+        console.log('Insights:', analysisResult.insights);
+
         // Update the document with analysis results
         accountingDoc.analysisResult = analysisResult;
         accountingDoc.processingStatus = 'completed';
         await accountingDoc.save();
 
-        console.log('Claude document processing completed');
+        console.log('Document saved with analysis results');
+        console.log('Saved P&L:', JSON.stringify(accountingDoc.analysisResult?.plStatement, null, 2));
 
         return NextResponse.json({
           success: true,
@@ -285,10 +301,18 @@ export const POST = requireAuth(async (request: NextRequest) => {
           message: 'Document uploaded and processed with Claude AI',
           processingMethod: 'claude',
           storageType,
+          analysisResult: {
+            plStatement: analysisResult.plStatement,
+            transactionCount: analysisResult.transactions?.length || 0,
+            summary: analysisResult.summary,
+          },
         }, { status: 201 });
 
       } catch (claudeError: any) {
-        console.error('Claude processing failed:', claudeError);
+        console.error('========== Claude processing failed ==========');
+        console.error('Error:', claudeError.message);
+        console.error('Stack:', claudeError.stack);
+        
         accountingDoc.processingStatus = 'failed';
         accountingDoc.errorMessage = claudeError.message;
         await accountingDoc.save();
@@ -297,6 +321,7 @@ export const POST = requireAuth(async (request: NextRequest) => {
           success: true,
           document: accountingDoc,
           warning: 'Document uploaded but AI processing failed. You can retry processing later.',
+          error: claudeError.message,
           storageType,
         }, { status: 201 });
       }

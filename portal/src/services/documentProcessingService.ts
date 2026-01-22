@@ -97,13 +97,25 @@ class DocumentProcessingService {
       const base64Content = fileBuffer.toString('base64');
 
       // Create the prompt for Claude
-      const systemPrompt = `You are an expert financial document analyzer. Your task is to extract and analyze financial data from uploaded documents.
+      const systemPrompt = `You are an expert financial document analyzer specializing in extracting P&L (Profit & Loss) data from financial documents.
+
+CRITICAL INSTRUCTIONS:
+1. You MUST extract actual financial numbers from the document
+2. DO NOT return 0 values unless the document truly shows zero amounts
+3. Look for: deposits, credits, income, revenue, sales, payments received (these are REVENUE)
+4. Look for: withdrawals, debits, expenses, payments made, charges, fees (these are EXPENSES)
+5. For bank statements: credits/deposits = revenue, debits/withdrawals = expenses
 
 For bank statements, extract:
 1. All transactions with dates, descriptions, and amounts
 2. Identify debits (expenses) and credits (income)
 3. Categorize transactions into standard accounting categories
 4. Calculate totals and generate a P&L summary
+
+IMPORTANT: The plStatement MUST contain the actual totals from the document:
+- totalRevenue = sum of ALL credits/deposits/income
+- totalExpenses = sum of ALL debits/withdrawals/expenses
+- netIncome = totalRevenue - totalExpenses
 
 Return your analysis as a JSON object with this exact structure:
 {
@@ -135,18 +147,32 @@ Return your analysis as a JSON object with this exact structure:
 
 Be thorough and extract ALL transactions. Use these standard categories:
 - Revenue: Sales, Services, Interest Income, Other Income
-- Expenses: Payroll, Rent, Utilities, Supplies, Marketing, Insurance, Professional Services, Bank Fees, Other Expenses`;
+- Expenses: Payroll, Rent, Utilities, Supplies, Marketing, Insurance, Professional Services, Bank Fees, Other Expenses
+
+REMEMBER: Extract REAL numbers from the document. If you see amounts like $1,234.56, use 1234.56 as the number value.`;
 
       const userPrompt = `Please analyze this ${documentType} for ${company} for ${month} ${year}.
 
-Extract all financial data and provide a complete analysis. The document is attached as a base64-encoded file.
+IMPORTANT: Extract ALL financial transactions and calculate the P&L (Profit & Loss) statement.
+
+For the plStatement section, you MUST:
+1. Sum ALL credits/deposits/income as totalRevenue
+2. Sum ALL debits/withdrawals/expenses as totalExpenses
+3. Calculate netIncome = totalRevenue - totalExpenses
+4. DO NOT return 0 values unless the document truly has no transactions
 
 Document filename: ${filename}
 Document type: ${documentType}
 Company: ${company}
 Period: ${month} ${year}
 
-Please return ONLY the JSON object with the analysis results.`;
+Scan the entire document carefully. Look for:
+- Transaction tables with dates, descriptions, and amounts
+- Running balances
+- Summary sections showing totals
+- Any monetary values
+
+Please return ONLY the JSON object with the analysis results. Make sure plStatement contains the actual calculated totals.`;
 
       // Call Claude API with the document
       // Build the content array based on file type
@@ -197,6 +223,8 @@ Please return ONLY the JSON object with the analysis results.`;
         system: systemPrompt,
       });
       console.log('[DocumentProcessingService] Claude API response received');
+      console.log('[DocumentProcessingService] Response usage:', response.usage);
+      console.log('[DocumentProcessingService] Response stop_reason:', response.stop_reason);
 
       // Extract the response text
       const responseText = response.content[0];
@@ -205,6 +233,7 @@ Please return ONLY the JSON object with the analysis results.`;
       }
 
       console.log('[DocumentProcessingService] Claude response length:', responseText.text.length);
+      console.log('[DocumentProcessingService] Claude response preview:', responseText.text.substring(0, 500));
 
       // Parse the JSON response - try multiple approaches
       let analysisResult: any = null;
@@ -212,11 +241,15 @@ Please return ONLY the JSON object with the analysis results.`;
       // First, try to find and parse JSON directly
       const jsonMatch = responseText.text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
+        console.log('[DocumentProcessingService] Found JSON match, length:', jsonMatch[0].length);
         try {
           analysisResult = JSON.parse(jsonMatch[0]);
           console.log('[DocumentProcessingService] Successfully parsed JSON response');
+          console.log('[DocumentProcessingService] Parsed P&L Statement:', JSON.stringify(analysisResult.plStatement, null, 2));
+          console.log('[DocumentProcessingService] Transaction count:', analysisResult.transactions?.length || 0);
         } catch (parseError: any) {
           console.warn('[DocumentProcessingService] JSON parse failed, trying to fix:', parseError.message);
+          console.warn('[DocumentProcessingService] JSON that failed to parse:', jsonMatch[0].substring(0, 500));
           
           // Try to fix common JSON issues
           let fixedJson = jsonMatch[0];
@@ -228,8 +261,10 @@ Please return ONLY the JSON object with the analysis results.`;
           try {
             analysisResult = JSON.parse(fixedJson);
             console.log('[DocumentProcessingService] Successfully parsed fixed JSON');
+            console.log('[DocumentProcessingService] Parsed P&L Statement:', JSON.stringify(analysisResult.plStatement, null, 2));
           } catch (fixError: any) {
             console.error('[DocumentProcessingService] Could not fix JSON:', fixError.message);
+            console.error('[DocumentProcessingService] Full response text:', responseText.text);
             
             // Return a minimal result with the raw text as insight
             analysisResult = {
@@ -239,9 +274,13 @@ Please return ONLY the JSON object with the analysis results.`;
               plStatement: { totalRevenue: 0, totalExpenses: 0, netIncome: 0, categories: {} },
               insights: ['Document was analyzed but response parsing failed. Raw response available in logs.'],
               rawResponse: responseText.text.substring(0, 1000),
+              parseError: fixError.message,
             };
           }
         }
+      } else {
+        console.error('[DocumentProcessingService] No JSON pattern found in response');
+        console.error('[DocumentProcessingService] Full response text:', responseText.text);
       }
 
       if (!analysisResult) {
@@ -252,26 +291,81 @@ Please return ONLY the JSON object with the analysis results.`;
           summary: { totalDebits: 0, totalCredits: 0, transactionCount: 0 },
           plStatement: { totalRevenue: 0, totalExpenses: 0, netIncome: 0, categories: {} },
           insights: ['No valid JSON found in Claude response'],
+          rawResponse: responseText.text.substring(0, 1000),
         };
       }
 
-      return {
+      // Validate and recalculate P&L if transactions exist but P&L is all zeros
+      let plStatement = analysisResult.plStatement || {
+        totalRevenue: 0,
+        totalExpenses: 0,
+        netIncome: 0,
+        categories: {},
+      };
+
+      const transactions = analysisResult.transactions || [];
+      
+      // If we have transactions but P&L shows all zeros, recalculate from transactions
+      if (transactions.length > 0 &&
+          plStatement.totalRevenue === 0 &&
+          plStatement.totalExpenses === 0) {
+        console.log('[DocumentProcessingService] P&L is all zeros but transactions exist, recalculating...');
+        
+        let totalRevenue = 0;
+        let totalExpenses = 0;
+        const categories: Record<string, number> = {};
+        
+        for (const tx of transactions) {
+          const amount = Math.abs(tx.amount || 0);
+          const category = tx.category || 'Other';
+          
+          if (tx.type === 'credit') {
+            totalRevenue += amount;
+            categories[category] = (categories[category] || 0) + amount;
+          } else if (tx.type === 'debit') {
+            totalExpenses += amount;
+            categories[category] = (categories[category] || 0) - amount;
+          }
+        }
+        
+        plStatement = {
+          totalRevenue,
+          totalExpenses,
+          netIncome: totalRevenue - totalExpenses,
+          categories,
+        };
+        
+        console.log('[DocumentProcessingService] Recalculated P&L:', plStatement);
+      }
+
+      // Also recalculate summary if needed
+      let summary = analysisResult.summary || {
+        totalDebits: 0,
+        totalCredits: 0,
+        transactionCount: 0,
+      };
+      
+      if (transactions.length > 0 && summary.transactionCount === 0) {
+        summary = {
+          totalDebits: transactions.filter((t: any) => t.type === 'debit').reduce((sum: number, t: any) => sum + Math.abs(t.amount || 0), 0),
+          totalCredits: transactions.filter((t: any) => t.type === 'credit').reduce((sum: number, t: any) => sum + Math.abs(t.amount || 0), 0),
+          transactionCount: transactions.length,
+        };
+        console.log('[DocumentProcessingService] Recalculated summary:', summary);
+      }
+
+      const finalResult = {
         documentType: analysisResult.documentType || documentType,
-        transactions: analysisResult.transactions || [],
-        summary: analysisResult.summary || {
-          totalDebits: 0,
-          totalCredits: 0,
-          transactionCount: 0,
-        },
-        plStatement: analysisResult.plStatement || {
-          totalRevenue: 0,
-          totalExpenses: 0,
-          netIncome: 0,
-          categories: {},
-        },
+        transactions: transactions,
+        summary: summary,
+        plStatement: plStatement,
         insights: analysisResult.insights || [],
         extractedAt: new Date(),
       };
+
+      console.log('[DocumentProcessingService] Final P&L result:', JSON.stringify(finalResult.plStatement, null, 2));
+      
+      return finalResult;
 
     } catch (error: any) {
       console.error('[DocumentProcessingService] Error processing document with Claude:', error);

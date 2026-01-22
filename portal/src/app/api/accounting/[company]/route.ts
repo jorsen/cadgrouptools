@@ -10,12 +10,16 @@ export const GET = requireAuth(async (request: NextRequest, context: { params: P
 
     // In Next.js 15+, params is a Promise that needs to be awaited
     const { company } = await context.params;
+    
+    console.log(`[Accounting API] Fetching data for company: ${company}`);
 
     // Fetch all documents for this company
     const documents = await AccountingDocument.find({ company })
       .sort({ year: -1, month: -1, createdAt: -1 })
       .populate('uploadedBy', 'name email')
       .lean();
+
+    console.log(`[Accounting API] Found ${documents.length} documents`);
 
     // Extract P&L statements from completed analyses
     const plStatements: any[] = [];
@@ -24,9 +28,19 @@ export const GET = requireAuth(async (request: NextRequest, context: { params: P
       'July', 'August', 'September', 'October', 'November', 'December'
     ];
 
-    documents.forEach((doc: any) => {
+    documents.forEach((doc: any, index: number) => {
+      console.log(`[Accounting API] Document ${index + 1}:`, {
+        id: doc._id,
+        month: doc.month,
+        year: doc.year,
+        processingStatus: doc.processingStatus,
+        hasAnalysisResult: !!doc.analysisResult,
+        hasPlStatement: !!doc.analysisResult?.plStatement,
+        plStatement: doc.analysisResult?.plStatement,
+      });
+      
       if (doc.processingStatus === 'completed' && doc.analysisResult?.plStatement) {
-        plStatements.push({
+        const plData = {
           month: doc.month,
           year: doc.year,
           totalRevenue: doc.analysisResult.plStatement.totalRevenue || 0,
@@ -34,9 +48,13 @@ export const GET = requireAuth(async (request: NextRequest, context: { params: P
           netIncome: doc.analysisResult.plStatement.netIncome || 0,
           categories: doc.analysisResult.plStatement.categories || {},
           insights: doc.analysisResult.insights || [],
-        });
+        };
+        console.log(`[Accounting API] Adding P&L statement:`, plData);
+        plStatements.push(plData);
       }
     });
+    
+    console.log(`[Accounting API] Total P&L statements: ${plStatements.length}`);
 
     // Sort P&L statements by year and month
     plStatements.sort((a, b) => {
