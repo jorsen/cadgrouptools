@@ -187,9 +187,9 @@ Please return ONLY the JSON object with the analysis results. Make sure plStatem
         console.log('[DocumentProcessingService] Base64 preview (first 100 chars):', base64Content.substring(0, 100));
         
         // Use the file content type for PDFs
-        // According to Anthropic docs, PDFs should use type: "document" with source type "base64"
+        // Try using 'file' type which is the standard for document uploads
         contentParts.push({
-          type: 'document',
+          type: 'file',
           source: {
             type: 'base64',
             media_type: 'application/pdf',
@@ -228,9 +228,9 @@ Please return ONLY the JSON object with the analysis results. Make sure plStatem
       console.log('[DocumentProcessingService] First part type:', contentParts[0]?.type);
       console.log('[DocumentProcessingService] Second part type:', contentParts[1]?.type);
       
-      // Use the messages API with PDF support
-      // Note: PDF support may require specific beta headers
-      const requestParams: any = {
+      // Use the messages API
+      // Note: PDF support is now generally available in Claude, no beta needed
+      const response = await client.messages.create({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 8192,
         messages: [
@@ -240,14 +240,7 @@ Please return ONLY the JSON object with the analysis results. Make sure plStatem
           },
         ],
         system: systemPrompt,
-      };
-      
-      // Add PDF beta if processing a PDF
-      if (isPDF) {
-        requestParams.betas = ['pdfs-2024-09-25'];
-      }
-      
-      const response = await client.messages.create(requestParams);
+      });
       console.log('[DocumentProcessingService] Claude API response received');
       console.log('[DocumentProcessingService] Response usage:', response.usage);
       console.log('[DocumentProcessingService] Response stop_reason:', response.stop_reason);
