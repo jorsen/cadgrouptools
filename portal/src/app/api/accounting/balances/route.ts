@@ -4,7 +4,44 @@ import { authOptions } from '@/lib/auth-config';
 import { connectToDatabase } from '@/lib/db';
 import { Transaction } from '@/models/Transaction';
 import { Statement } from '@/models/Statement';
+import { Category } from '@/models/Category';
+import { Account } from '@/models/Account';
+import { Types } from 'mongoose';
 import dayjs from 'dayjs';
+
+// Helper function to get or create reconciliation category
+async function getOrCreateReconciliationCategory(): Promise<Types.ObjectId> {
+  let category = await Category.findOne({ name: 'Reconciliation', type: 'income' });
+  
+  if (!category) {
+    category = await Category.create({
+      name: 'Reconciliation',
+      type: 'income', // Can be either income or expense depending on direction
+      description: 'Balance reconciliation adjustments',
+      isSystem: true,
+      isDeductible: false,
+      status: 'active',
+    });
+  }
+  
+  return category._id;
+}
+
+// Helper function to get company from statement
+async function getCompanyFromStatement(statement: any): Promise<Types.ObjectId | null> {
+  if (statement.account && statement.account.company) {
+    return statement.account.company;
+  }
+  
+  if (statement.accountName) {
+    const account = await Account.findOne({ name: statement.accountName }).lean();
+    if (account && account.company) {
+      return account.company as Types.ObjectId;
+    }
+  }
+  
+  return null;
+}
 
 // GET: Fetch account balances and balance history
 export async function GET(request: NextRequest) {
@@ -317,11 +354,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get the latest transaction for this account
+    // Get the latest transaction for this account with statement populated
     const latestTransaction = await Transaction.findOne()
       .populate({
         path: 'statement',
         match: { accountName },
+        populate: { path: 'account' }
       })
       .sort({ txnDate: -1 })
       .exec();
@@ -338,16 +376,30 @@ export async function POST(request: NextRequest) {
 
     // Create reconciliation transaction if there's a difference
     if (Math.abs(difference) > 0.01) { // Allow for small rounding differences
-      const reconciliationTxn = await Transaction.create({
-        statement: latestTransaction.statement,
+      // Get or create reconciliation category
+      const reconciliationCategoryId = await getOrCreateReconciliationCategory();
+      
+      // Get company from statement
+      const companyId = await getCompanyFromStatement(latestTransaction.statement);
+      
+      const transactionData: any = {
+        statement: latestTransaction.statement._id || latestTransaction.statement,
         txnDate: reconcileDate || new Date(),
         description: `Balance Reconciliation${notes ? `: ${notes}` : ''}`,
         amount: Math.abs(difference),
         direction: difference > 0 ? 'credit' : 'debit',
         balance: actualBalance,
-        category: 'Reconciliation',
+        category: reconciliationCategoryId,
         confidence: 1,
-      });
+        taxDeductible: false,
+      };
+      
+      // Add company if available
+      if (companyId) {
+        transactionData.company = companyId;
+      }
+      
+      const reconciliationTxn = await Transaction.create(transactionData);
 
       return NextResponse.json({
         success: true,
@@ -369,9 +421,9 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error('Error reconciling balance:', error);
     return NextResponse.json(
-      { 
-        error: 'Failed to reconcile balance', 
-        details: error.message 
+      {
+        error: 'Failed to reconcile balance',
+        details: error.message
       },
       { status: 500 }
     );

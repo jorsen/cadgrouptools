@@ -1,5 +1,7 @@
 import { Statement } from '@/models/Statement';
 import { Transaction } from '@/models/Transaction';
+import { Category } from '@/models/Category';
+import { Account } from '@/models/Account';
 import { Types } from 'mongoose';
 // Use Tesseract OCR service
 import { tesseractOCRService } from '@/lib/ocr-tesseract';
@@ -121,10 +123,76 @@ async function extractTextFromPdfWithPdfJs(buffer: Buffer): Promise<string> {
   return combinedText.trim();
 }
 
+// Helper function to get or create default categories for uncategorized transactions
+async function getOrCreateDefaultCategories(): Promise<{ incomeCategory: Types.ObjectId; expenseCategory: Types.ObjectId }> {
+  // Try to find existing uncategorized categories
+  let incomeCategory = await Category.findOne({ name: 'Uncategorized Income', type: 'income' });
+  let expenseCategory = await Category.findOne({ name: 'Uncategorized Expense', type: 'expense' });
+
+  // Create if they don't exist
+  if (!incomeCategory) {
+    incomeCategory = await Category.create({
+      name: 'Uncategorized Income',
+      type: 'income',
+      description: 'Default category for uncategorized income transactions',
+      isSystem: true,
+      isDeductible: true,
+      status: 'active',
+    });
+    console.log('Created default Uncategorized Income category');
+  }
+
+  if (!expenseCategory) {
+    expenseCategory = await Category.create({
+      name: 'Uncategorized Expense',
+      type: 'expense',
+      description: 'Default category for uncategorized expense transactions',
+      isSystem: true,
+      isDeductible: true,
+      status: 'active',
+    });
+    console.log('Created default Uncategorized Expense category');
+  }
+
+  return {
+    incomeCategory: incomeCategory._id,
+    expenseCategory: expenseCategory._id,
+  };
+}
+
 async function createTransactionsFromOCR(
   statementId: string,
   extractedTransactions: ExtractedTransaction[]
 ): Promise<void> {
+  // Get the statement with its account to find the company
+  const statement = await Statement.findById(statementId).populate('account').lean();
+  if (!statement) {
+    throw new Error(`Statement not found: ${statementId}`);
+  }
+
+  // Get company ID from the account, or try to find account by accountName
+  let companyId: Types.ObjectId | null = null;
+  
+  if (statement.account && (statement.account as any).company) {
+    companyId = (statement.account as any).company;
+  } else if (statement.accountName) {
+    // Try to find account by name to get company
+    const account = await Account.findOne({ name: statement.accountName }).lean();
+    if (account && account.company) {
+      companyId = account.company as Types.ObjectId;
+      
+      // Update statement with account reference for future use
+      await Statement.findByIdAndUpdate(statementId, { account: account._id });
+    }
+  }
+
+  if (!companyId) {
+    console.warn(`No company found for statement ${statementId}. Transactions will be created without company reference.`);
+  }
+
+  // Get or create default categories
+  const { incomeCategory, expenseCategory } = await getOrCreateDefaultCategories();
+
   const existingTransactions = await Transaction.find({ statement: statementId })
     .select('txnDate description amount direction')
     .lean();
@@ -155,25 +223,46 @@ async function createTransactionsFromOCR(
     const signature = `${txnDate.toISOString().split('T')[0]}_${extracted.description}_${extracted.amount}_${extracted.type}`;
     if (existingSignatures.has(signature)) continue;
 
-    newTransactions.push({
+    // Determine category based on transaction direction
+    const category = extracted.type === 'credit' ? incomeCategory : expenseCategory;
+
+    // Build transaction object with required fields
+    const transactionData: any = {
       statement: new Types.ObjectId(statementId),
       txnDate,
       description: extracted.description,
       amount: extracted.amount,
       direction: extracted.type,
       balance: extracted.balance,
+      category: category,
       confidence: 0.8,
-    });
+      taxDeductible: true,
+    };
+
+    // Only add company if we have one
+    if (companyId) {
+      transactionData.company = companyId;
+    }
+
+    newTransactions.push(transactionData);
   }
 
   if (newTransactions.length > 0) {
     await Transaction.insertMany(newTransactions);
+    console.log(`Created ${newTransactions.length} new transactions for statement ${statementId}${companyId ? ` (company: ${companyId})` : ' (no company)'}`);
+    
     await Statement.findByIdAndUpdate(statementId, {
       status: 'completed',
       $inc: {
         transactionsFound: extractedTransactions.length,
         transactionsImported: newTransactions.length,
       },
+    });
+  } else {
+    await Statement.findByIdAndUpdate(statementId, {
+      status: 'completed',
+      transactionsFound: extractedTransactions.length,
+      transactionsImported: 0,
     });
   }
 }

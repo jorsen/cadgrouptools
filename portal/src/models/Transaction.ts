@@ -3,11 +3,11 @@ import { Schema, model, models, Types } from 'mongoose';
 const TransactionSchema = new Schema(
   {
     statement: { type: Types.ObjectId, ref: 'Statement', required: true, index: true },
-    company: { 
-      type: Types.ObjectId, 
-      ref: 'Company', 
-      required: true, 
-      index: true 
+    company: {
+      type: Types.ObjectId,
+      ref: 'Company',
+      required: false,  // Made optional to handle legacy data and cases where company can't be determined
+      index: true
     },
     txnDate: { type: Date, required: true, index: true },
     description: { type: String, required: true },
@@ -16,22 +16,22 @@ const TransactionSchema = new Schema(
     direction: { type: String, enum: ['debit', 'credit'], required: true, index: true },
     checkNo: { type: String },
     balance: { type: Number },
-    category: { 
-      type: Types.ObjectId, 
-      ref: 'Category', 
-      required: true, 
-      index: true 
+    category: {
+      type: Types.ObjectId,
+      ref: 'Category',
+      required: false,  // Made optional to handle legacy data
+      index: true
     },
-    subcategory: { 
-      type: Types.ObjectId, 
+    subcategory: {
+      type: Types.ObjectId,
       ref: 'Category',
       default: null
     },
     confidence: { type: Number, min: 0, max: 1 },
     isReconciled: { type: Boolean, default: false, index: true },
     reconciledAt: { type: Date },
-    reconciledBy: { 
-      type: Types.ObjectId, 
+    reconciledBy: {
+      type: Types.ObjectId,
       ref: 'User'
     },
     taxDeductible: { type: Boolean, default: true },

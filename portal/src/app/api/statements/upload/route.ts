@@ -9,6 +9,8 @@ import { connectToDatabase } from '@/lib/db';
 import { Statement } from '@/models/Statement';
 import { File } from '@/models/File';
 import { Transaction } from '@/models/Transaction';
+import { Category } from '@/models/Category';
+import { Account } from '@/models/Account';
 import { Types } from 'mongoose';
 import { supabaseAdmin, STORAGE_BUCKET } from '@/lib/supabaseAdmin';
 // Use Tesseract OCR service for all OCR processing
@@ -365,12 +367,80 @@ async function extractTextFromPdfWithPdfJs(buffer: Buffer): Promise<string> {
   }
 }
 
+// Helper function to get or create default categories for uncategorized transactions
+async function getOrCreateDefaultCategories(): Promise<{ incomeCategory: Types.ObjectId; expenseCategory: Types.ObjectId }> {
+  // Try to find existing uncategorized categories
+  let incomeCategory = await Category.findOne({ name: 'Uncategorized Income', type: 'income' });
+  let expenseCategory = await Category.findOne({ name: 'Uncategorized Expense', type: 'expense' });
+
+  // Create if they don't exist
+  if (!incomeCategory) {
+    incomeCategory = await Category.create({
+      name: 'Uncategorized Income',
+      type: 'income',
+      description: 'Default category for uncategorized income transactions',
+      isSystem: true,
+      isDeductible: true,
+      status: 'active',
+    });
+    console.log('Created default Uncategorized Income category');
+  }
+
+  if (!expenseCategory) {
+    expenseCategory = await Category.create({
+      name: 'Uncategorized Expense',
+      type: 'expense',
+      description: 'Default category for uncategorized expense transactions',
+      isSystem: true,
+      isDeductible: true,
+      status: 'active',
+    });
+    console.log('Created default Uncategorized Expense category');
+  }
+
+  return {
+    incomeCategory: incomeCategory._id,
+    expenseCategory: expenseCategory._id,
+  };
+}
+
 // Helper function to create transactions from OCR data with deduplication
 async function createTransactionsFromOCR(
   statementId: string,
   extractedTransactions: ExtractedTransaction[]
 ): Promise<void> {
   try {
+    // Get the statement with its account to find the company
+    const statement = await Statement.findById(statementId).populate('account').lean();
+    if (!statement) {
+      throw new Error(`Statement not found: ${statementId}`);
+    }
+
+    // Get company ID from the account, or try to find account by accountName
+    let companyId: Types.ObjectId | null = null;
+    
+    if (statement.account && (statement.account as any).company) {
+      companyId = (statement.account as any).company;
+    } else if (statement.accountName) {
+      // Try to find account by name to get company
+      const account = await Account.findOne({ name: statement.accountName }).lean();
+      if (account && account.company) {
+        companyId = account.company as Types.ObjectId;
+        
+        // Update statement with account reference for future use
+        await Statement.findByIdAndUpdate(statementId, { account: account._id });
+      }
+    }
+
+    if (!companyId) {
+      console.warn(`No company found for statement ${statementId}. Transactions will be created without company reference.`);
+      // For now, we'll still create transactions but they won't appear in P&L reports
+      // In production, you might want to throw an error or handle this differently
+    }
+
+    // Get or create default categories
+    const { incomeCategory, expenseCategory } = await getOrCreateDefaultCategories();
+
     // Get existing transactions for this statement to avoid duplicates
     const existingTransactions = await Transaction.find({ statement: statementId })
       .select('txnDate description amount direction')
@@ -378,7 +448,7 @@ async function createTransactionsFromOCR(
 
     // Create a Set of existing transaction signatures for deduplication
     const existingSignatures = new Set(
-      existingTransactions.map(t => 
+      existingTransactions.map(t =>
         `${new Date(t.txnDate).toISOString().split('T')[0]}_${t.description}_${t.amount}_${t.direction}`
       )
     );
@@ -415,22 +485,35 @@ async function createTransactionsFromOCR(
         continue;
       }
 
-      // Add to new transactions list
-      newTransactions.push({
+      // Determine category based on transaction direction
+      const category = extracted.type === 'credit' ? incomeCategory : expenseCategory;
+
+      // Build transaction object with required fields
+      const transactionData: any = {
         statement: new Types.ObjectId(statementId),
         txnDate,
         description: extracted.description,
         amount: extracted.amount,
         direction: extracted.type,
         balance: extracted.balance,
+        category: category,
         confidence: 0.8, // Default confidence for OCR-extracted transactions
-      });
+        taxDeductible: true,
+      };
+
+      // Only add company if we have one
+      if (companyId) {
+        transactionData.company = companyId;
+      }
+
+      // Add to new transactions list
+      newTransactions.push(transactionData);
     }
 
     // Bulk insert new transactions
     if (newTransactions.length > 0) {
       await Transaction.insertMany(newTransactions);
-      console.log(`Created ${newTransactions.length} new transactions for statement ${statementId}`);
+      console.log(`Created ${newTransactions.length} new transactions for statement ${statementId}${companyId ? ` (company: ${companyId})` : ' (no company)'}`);
       
       // Update statement status to completed
       await Statement.findByIdAndUpdate(statementId, {

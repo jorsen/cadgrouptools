@@ -4,8 +4,59 @@ import { authOptions } from '@/lib/auth-config';
 import { connectToDatabase } from '@/lib/db';
 import { Transaction } from '@/models/Transaction';
 import { Statement } from '@/models/Statement';
+import { Category } from '@/models/Category';
+import { Account } from '@/models/Account';
 import { Types } from 'mongoose';
 import { withActivityTracking } from '@/middleware/activityTracking';
+
+// Helper function to get or create default categories for uncategorized transactions
+async function getOrCreateDefaultCategories(): Promise<{ incomeCategory: Types.ObjectId; expenseCategory: Types.ObjectId }> {
+  let incomeCategory = await Category.findOne({ name: 'Uncategorized Income', type: 'income' });
+  let expenseCategory = await Category.findOne({ name: 'Uncategorized Expense', type: 'expense' });
+
+  if (!incomeCategory) {
+    incomeCategory = await Category.create({
+      name: 'Uncategorized Income',
+      type: 'income',
+      description: 'Default category for uncategorized income transactions',
+      isSystem: true,
+      isDeductible: true,
+      status: 'active',
+    });
+  }
+
+  if (!expenseCategory) {
+    expenseCategory = await Category.create({
+      name: 'Uncategorized Expense',
+      type: 'expense',
+      description: 'Default category for uncategorized expense transactions',
+      isSystem: true,
+      isDeductible: true,
+      status: 'active',
+    });
+  }
+
+  return {
+    incomeCategory: incomeCategory._id,
+    expenseCategory: expenseCategory._id,
+  };
+}
+
+// Helper function to get company from statement
+async function getCompanyFromStatement(statement: any): Promise<Types.ObjectId | null> {
+  if (statement.account && statement.account.company) {
+    return statement.account.company;
+  }
+  
+  if (statement.accountName) {
+    const account = await Account.findOne({ name: statement.accountName }).lean();
+    if (account && account.company) {
+      return account.company as Types.ObjectId;
+    }
+  }
+  
+  return null;
+}
 
 // GET: Fetch transactions with filtering and pagination
 export async function GET(request: NextRequest) {
@@ -169,7 +220,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const statement = await Statement.findById(statementId);
+    const statement = await Statement.findById(statementId).populate('account');
     if (!statement) {
       return NextResponse.json(
         { error: 'Statement not found' },
@@ -177,12 +228,31 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Get company from statement
+    const companyId = await getCompanyFromStatement(statement);
+    
+    // Get or create default categories
+    const { incomeCategory, expenseCategory } = await getOrCreateDefaultCategories();
+
     // Handle single transaction
     if (!Array.isArray(transactions)) {
-      const transaction = await Transaction.create({
+      // Determine category based on direction if not provided
+      const direction = body.direction || 'debit';
+      const category = body.category || (direction === 'credit' ? incomeCategory : expenseCategory);
+      
+      const transactionData: any = {
         ...body,
         statement: statementId,
-      });
+        category: category,
+        taxDeductible: body.taxDeductible !== undefined ? body.taxDeductible : true,
+      };
+      
+      // Add company if available
+      if (companyId) {
+        transactionData.company = companyId;
+      }
+      
+      const transaction = await Transaction.create(transactionData);
 
       return NextResponse.json({
         success: true,
@@ -191,11 +261,25 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle bulk transactions
-    const transactionDocs = transactions.map(txn => ({
-      ...txn,
-      statement: statementId,
-      txnDate: new Date(txn.txnDate || txn.date),
-    }));
+    const transactionDocs = transactions.map(txn => {
+      const direction = txn.direction || 'debit';
+      const category = txn.category || (direction === 'credit' ? incomeCategory : expenseCategory);
+      
+      const transactionData: any = {
+        ...txn,
+        statement: statementId,
+        txnDate: new Date(txn.txnDate || txn.date),
+        category: category,
+        taxDeductible: txn.taxDeductible !== undefined ? txn.taxDeductible : true,
+      };
+      
+      // Add company if available
+      if (companyId) {
+        transactionData.company = companyId;
+      }
+      
+      return transactionData;
+    });
 
     const createdTransactions = await Transaction.insertMany(transactionDocs);
 
