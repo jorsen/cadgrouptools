@@ -76,9 +76,15 @@ export const POST = requireAuth(async (request: NextRequest) => {
 
         // Try GridFS first
         if (doc.gridfsFileId) {
-          console.log(`Trying to fetch from GridFS: ${doc.gridfsFileId}`);
+          // Extract the actual file ID if it's in gridfs:// format
+          let gridfsId = doc.gridfsFileId;
+          if (gridfsId.startsWith('gridfs://')) {
+            gridfsId = gridfsId.replace('gridfs://', '');
+          }
+          
+          console.log(`Trying to fetch from GridFS: ${gridfsId}`);
           try {
-            const gridfsFile = await getFileFromGridFS(doc.gridfsFileId);
+            const gridfsFile = await getFileFromGridFS(gridfsId);
             if (gridfsFile) {
               fileBuffer = gridfsFile.buffer;
               filename = gridfsFile.filename || filename;
@@ -93,18 +99,26 @@ export const POST = requireAuth(async (request: NextRequest) => {
         if (!fileBuffer && doc.supabaseUrl) {
           console.log(`Trying to fetch from Supabase URL: ${doc.supabaseUrl}`);
           try {
-            const response = await fetch(doc.supabaseUrl);
+            const response = await fetch(doc.supabaseUrl, {
+              headers: {
+                'Accept': '*/*',
+              },
+            });
+            console.log(`Supabase URL response: status=${response.status}, statusText=${response.statusText}`);
+            
             if (response.ok) {
               const arrayBuffer = await response.arrayBuffer();
               fileBuffer = Buffer.from(arrayBuffer);
               // Extract filename from URL or path
               filename = doc.supabasePath?.split('/').pop() || 'document.pdf';
-              console.log(`Successfully retrieved from Supabase, size: ${fileBuffer.length}`);
+              console.log(`Successfully retrieved from Supabase URL, size: ${fileBuffer.length}`);
             } else {
-              console.error(`Supabase fetch failed: ${response.status} ${response.statusText}`);
+              // Try to get error details
+              const errorText = await response.text().catch(() => 'Could not read error body');
+              console.error(`Supabase URL fetch failed: ${response.status} ${response.statusText}`, errorText.substring(0, 200));
             }
           } catch (supabaseError: any) {
-            console.error(`Supabase fetch error:`, supabaseError.message);
+            console.error(`Supabase URL fetch error:`, supabaseError.message);
           }
         }
 

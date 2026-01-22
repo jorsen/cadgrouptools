@@ -204,13 +204,56 @@ Please return ONLY the JSON object with the analysis results.`;
         throw new Error('Unexpected response type from Claude');
       }
 
-      // Parse the JSON response
+      console.log('[DocumentProcessingService] Claude response length:', responseText.text.length);
+
+      // Parse the JSON response - try multiple approaches
+      let analysisResult: any = null;
+      
+      // First, try to find and parse JSON directly
       const jsonMatch = responseText.text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No valid JSON found in Claude response');
+      if (jsonMatch) {
+        try {
+          analysisResult = JSON.parse(jsonMatch[0]);
+          console.log('[DocumentProcessingService] Successfully parsed JSON response');
+        } catch (parseError: any) {
+          console.warn('[DocumentProcessingService] JSON parse failed, trying to fix:', parseError.message);
+          
+          // Try to fix common JSON issues
+          let fixedJson = jsonMatch[0];
+          
+          // Remove trailing commas before ] or }
+          fixedJson = fixedJson.replace(/,(\s*[}\]])/g, '$1');
+          
+          // Try parsing again
+          try {
+            analysisResult = JSON.parse(fixedJson);
+            console.log('[DocumentProcessingService] Successfully parsed fixed JSON');
+          } catch (fixError: any) {
+            console.error('[DocumentProcessingService] Could not fix JSON:', fixError.message);
+            
+            // Return a minimal result with the raw text as insight
+            analysisResult = {
+              documentType: documentType,
+              transactions: [],
+              summary: { totalDebits: 0, totalCredits: 0, transactionCount: 0 },
+              plStatement: { totalRevenue: 0, totalExpenses: 0, netIncome: 0, categories: {} },
+              insights: ['Document was analyzed but response parsing failed. Raw response available in logs.'],
+              rawResponse: responseText.text.substring(0, 1000),
+            };
+          }
+        }
       }
 
-      const analysisResult = JSON.parse(jsonMatch[0]);
+      if (!analysisResult) {
+        console.error('[DocumentProcessingService] No JSON found in response');
+        analysisResult = {
+          documentType: documentType,
+          transactions: [],
+          summary: { totalDebits: 0, totalCredits: 0, transactionCount: 0 },
+          plStatement: { totalRevenue: 0, totalExpenses: 0, netIncome: 0, categories: {} },
+          insights: ['No valid JSON found in Claude response'],
+        };
+      }
 
       return {
         documentType: analysisResult.documentType || documentType,
