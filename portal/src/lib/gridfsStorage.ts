@@ -67,13 +67,29 @@ export async function uploadToGridFS(
   });
 }
 
+// Helper function to clean file ID
+function cleanGridFSFileId(fileId: string): string {
+  let cleanId = fileId;
+  if (cleanId.startsWith('gridfs://')) {
+    cleanId = cleanId.replace('gridfs://', '');
+  }
+  return cleanId;
+}
+
 // Download file from GridFS
 export async function downloadFromGridFS(fileId: string): Promise<Buffer> {
+  const cleanFileId = cleanGridFSFileId(fileId);
+  
+  // Validate ObjectId format
+  if (!ObjectId.isValid(cleanFileId)) {
+    throw new Error(`Invalid ObjectId format: ${cleanFileId}`);
+  }
+  
   const bucket = await getGridFSBucket();
   
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    const downloadStream = bucket.openDownloadStream(new ObjectId(fileId));
+    const downloadStream = bucket.openDownloadStream(new ObjectId(cleanFileId));
 
     downloadStream.on('data', (chunk) => {
       chunks.push(chunk);
@@ -92,27 +108,58 @@ export async function downloadFromGridFS(fileId: string): Promise<Buffer> {
 
 // Delete file from GridFS
 export async function deleteFromGridFS(fileId: string): Promise<void> {
+  const cleanFileId = cleanGridFSFileId(fileId);
+  
+  // Validate ObjectId format
+  if (!ObjectId.isValid(cleanFileId)) {
+    throw new Error(`Invalid ObjectId format: ${cleanFileId}`);
+  }
+  
   const bucket = await getGridFSBucket();
-  await bucket.delete(new ObjectId(fileId));
+  await bucket.delete(new ObjectId(cleanFileId));
 }
 
 // Get file info from GridFS
 export async function getFileInfo(fileId: string): Promise<any> {
-  const bucket = await getGridFSBucket();
-  const cursor = bucket.find({ _id: new ObjectId(fileId) });
-  const files = await cursor.toArray();
-  return files[0] || null;
+  try {
+    const cleanFileId = cleanGridFSFileId(fileId);
+    
+    // Validate ObjectId format
+    if (!ObjectId.isValid(cleanFileId)) {
+      console.error('[GridFS] Invalid ObjectId format:', cleanFileId);
+      return null;
+    }
+    
+    const bucket = await getGridFSBucket();
+    const cursor = bucket.find({ _id: new ObjectId(cleanFileId) });
+    const files = await cursor.toArray();
+    return files[0] || null;
+  } catch (error) {
+    console.error('[GridFS] Error getting file info:', error);
+    return null;
+  }
 }
 
 // Get file from GridFS with buffer and metadata
 export async function getFileFromGridFS(fileId: string): Promise<{ buffer: Buffer; filename: string; metadata: any } | null> {
   try {
-    const fileInfo = await getFileInfo(fileId);
+    const cleanFileId = cleanGridFSFileId(fileId);
+    console.log(`[GridFS] Getting file: original=${fileId}, cleaned=${cleanFileId}`);
+    
+    const fileInfo = await getFileInfo(cleanFileId);
     if (!fileInfo) {
+      console.log(`[GridFS] File info not found for: ${cleanFileId}`);
       return null;
     }
+    
+    console.log(`[GridFS] File info found:`, {
+      filename: fileInfo.filename,
+      length: fileInfo.length,
+      uploadDate: fileInfo.uploadDate,
+    });
 
-    const buffer = await downloadFromGridFS(fileId);
+    const buffer = await downloadFromGridFS(cleanFileId);
+    console.log(`[GridFS] Downloaded buffer size: ${buffer.length} bytes`);
     
     return {
       buffer,
