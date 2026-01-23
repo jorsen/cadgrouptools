@@ -255,6 +255,14 @@ export const POST = requireAuth(async (request: NextRequest) => {
     // Fallback: Use Claude for document processing if Manus is not available
     const isClaudeConfigured = documentProcessingService.isConfigured();
     console.log('Claude document processing configured:', isClaudeConfigured);
+    
+    // Log environment variables (without exposing actual keys)
+    console.log('Environment check:', {
+      hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
+      anthropicKeyLength: process.env.ANTHROPIC_API_KEY?.length || 0,
+      hasManusKey: !!process.env.MANUS_API_KEY,
+      manusKeyLength: process.env.MANUS_API_KEY?.length || 0,
+    });
 
     if (isClaudeConfigured) {
       try {
@@ -287,6 +295,19 @@ export const POST = requireAuth(async (request: NextRequest) => {
         console.log('Summary:', JSON.stringify(analysisResult.summary, null, 2));
         console.log('Insights:', analysisResult.insights);
 
+        // Check if the result has meaningful data
+        const hasValidData = (analysisResult.plStatement.totalRevenue > 0 ||
+                            analysisResult.plStatement.totalExpenses > 0 ||
+                            (analysisResult.transactions && analysisResult.transactions.length > 0));
+        
+        if (!hasValidData) {
+          console.warn('========== WARNING: Claude returned no meaningful financial data ==========');
+          console.warn('This might indicate:');
+          console.warn('1. The document has no financial transactions');
+          console.warn('2. The document format is not supported');
+          console.warn('3. Claude could not extract data from the document');
+        }
+
         // Update the document with analysis results
         accountingDoc.analysisResult = analysisResult;
         accountingDoc.processingStatus = 'completed';
@@ -298,13 +319,14 @@ export const POST = requireAuth(async (request: NextRequest) => {
         return NextResponse.json({
           success: true,
           document: accountingDoc,
-          message: 'Document uploaded and processed with Claude AI',
+          message: hasValidData ? 'Document uploaded and processed with Claude AI' : 'Document uploaded but no financial data was found',
           processingMethod: 'claude',
           storageType,
           analysisResult: {
             plStatement: analysisResult.plStatement,
             transactionCount: analysisResult.transactions?.length || 0,
             summary: analysisResult.summary,
+            hasValidData,
           },
         }, { status: 201 });
 
@@ -334,6 +356,11 @@ export const POST = requireAuth(async (request: NextRequest) => {
       message: 'Document uploaded to storage. AI processing is not configured.',
       warning: 'Neither MANUS_API_KEY nor ANTHROPIC_API_KEY is configured. Please set up API keys to enable AI processing.',
       storageType,
+      nextSteps: [
+        '1. Set up ANTHROPIC_API_KEY in your environment variables for Claude AI processing',
+        '2. Or set up MANUS_API_KEY for Manus AI processing',
+        '3. Then click "Process" button on the document to analyze it'
+      ]
     }, { status: 201 });
 
   } catch (error: any) {
