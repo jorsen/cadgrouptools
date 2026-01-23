@@ -249,8 +249,8 @@ Return ONLY the JSON object with the analysis results. Ensure plStatement contai
       // Use the messages API
       // Note: PDF support is now generally available in Claude, no beta needed
       const response = await client.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 8192,
+        model: 'claude-3-5-sonnet-20241022', // Use a more stable model version
+        max_tokens: 4096, // Reduce max tokens to avoid issues
         messages: [
           {
             role: 'user',
@@ -258,6 +258,18 @@ Return ONLY the JSON object with the analysis results. Ensure plStatement contai
           },
         ],
         system: systemPrompt,
+      }).catch((apiError: any) => {
+        // Log detailed error information
+        console.error('[DocumentProcessingService] Claude API Error Details:', {
+          message: apiError.message,
+          status: apiError.status,
+          error: apiError.error,
+          type: apiError.type,
+          request_id: apiError.request_id,
+        });
+        
+        // Re-throw with more context
+        throw new Error(`Claude API error: ${apiError.status} ${JSON.stringify(apiError.error || apiError.message)}`);
       });
       console.log('[DocumentProcessingService] Claude API response received');
       console.log('[DocumentProcessingService] Response usage:', response.usage);
@@ -452,7 +464,27 @@ Return ONLY the JSON object with the analysis results. Ensure plStatement contai
         message: error.message,
         status: error.status,
         code: error.code,
+        type: error.type,
       });
+      
+      // Check if it's an API key issue
+      if (error.message?.includes('401') || error.message?.includes('authentication')) {
+        throw new Error('Claude API authentication failed. Please check your ANTHROPIC_API_KEY is valid and active.');
+      }
+      
+      // Check if it's a rate limit issue
+      if (error.message?.includes('429') || error.message?.includes('rate')) {
+        throw new Error('Claude API rate limit exceeded. Please try again later.');
+      }
+      
+      // Check if it's a bad request (400) - might be model or content issue
+      if (error.message?.includes('400')) {
+        throw new Error(`Claude API request format error. This might be due to:
+1. Invalid document format
+2. File too large
+3. Unsupported content type
+Error details: ${error.message}`);
+      }
       
       // Re-throw the error so the caller can handle it properly
       throw new Error(`Claude API error: ${error.message || 'Unknown error'}`);

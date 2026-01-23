@@ -98,11 +98,14 @@ export const POST = requireAuth(async (request: NextRequest) => {
               });
               
               const gridfsFile = await getFileFromGridFS(gridfsId);
-              if (gridfsFile) {
+              if (gridfsFile && gridfsFile.buffer) {
                 fileBuffer = gridfsFile.buffer;
                 filename = gridfsFile.filename || filename;
                 console.log(`[GridFS] Successfully retrieved file, size: ${fileBuffer.length} bytes`);
                 storageAttempts.push({ method: 'gridfs', success: true, size: fileBuffer.length });
+              } else {
+                console.log(`[GridFS] File exists but no buffer returned`);
+                storageAttempts.push({ method: 'gridfs', success: false, error: 'File exists but no buffer returned' });
               }
             } else {
               console.log(`[GridFS] File not found in database for ID: ${gridfsId}`);
@@ -188,11 +191,29 @@ export const POST = requireAuth(async (request: NextRequest) => {
           console.error(`\n[STORAGE FAILURE] Could not retrieve file for document ${doc._id}`);
           console.error(`Storage attempts:`, JSON.stringify(storageAttempts, null, 2));
           
+          // Try to provide more helpful error messages
+          let errorMessage = `Could not retrieve file from storage.`;
+          if (doc.gridfsFileId && !storageAttempts.find(a => a.method === 'gridfs' && a.success)) {
+            errorMessage += ` GridFS file with ID ${doc.gridfsFileId} could not be accessed.`;
+          }
+          if (doc.supabaseUrl && !storageAttempts.find(a => a.method === 'supabase-url' && a.success)) {
+            errorMessage += ` Supabase URL could not be accessed.`;
+          }
+          if (doc.supabasePath && !storageAttempts.find(a => a.method === 'supabase-api' && a.success)) {
+            errorMessage += ` Supabase API could not access file at ${doc.supabasePath}.`;
+          }
+          
+          // Mark document as failed so it doesn't get retried automatically
+          doc.processingStatus = 'failed';
+          doc.errorMessage = errorMessage;
+          await doc.save();
+          
           results.push({
             documentId: doc._id,
             status: 'error',
-            error: `Could not retrieve file from storage. gridfsFileId: ${doc.gridfsFileId || 'none'}, supabasePath: ${doc.supabasePath || 'none'}, supabaseUrl: ${doc.supabaseUrl ? 'set' : 'none'}`,
+            error: errorMessage,
             storageAttempts,
+            recommendation: 'Consider re-uploading the document or checking storage configuration'
           });
           continue;
         }
