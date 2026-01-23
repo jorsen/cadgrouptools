@@ -93,18 +93,51 @@ export default function AccountingUploadPage() {
         throw new Error('Invalid file object');
       }
       
+      // Try to extract month/year from filename if it seems to be a bank statement
+      let suggestedMonth = values.month;
+      let suggestedYear = values.year;
+      
+      const fileName = (actualFile as File).name.toLowerCase();
+      
+      // Check if filename contains month/year patterns
+      const monthMatch = fileName.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i);
+      const yearMatch = fileName.match(/\b(20\d{2})\b/);
+      
+      if (monthMatch && yearMatch && !values.month && !values.year) {
+        // Only use filename suggestions if form fields are empty
+        const monthMap: Record<string, string> = {
+          'jan': 'January', 'feb': 'February', 'mar': 'March', 'apr': 'April',
+          'may': 'May', 'jun': 'June', 'jul': 'July', 'aug': 'August',
+          'sep': 'September', 'oct': 'October', 'nov': 'November', 'dec': 'December'
+        };
+        
+        suggestedMonth = monthMap[monthMatch[1].toLowerCase()];
+        suggestedYear = parseInt(yearMatch[1]);
+        
+        // Update form with suggested values
+        form.setFieldsValue({
+          company: values.company,
+          month: suggestedMonth,
+          year: suggestedYear,
+          documentType: values.documentType
+        });
+        
+        message.info(`Detected ${suggestedMonth} ${suggestedYear} from filename. Please verify these values.`);
+      }
+      
       formData.append('file', actualFile as Blob);
       formData.append('company', companyValue);
-      formData.append('month', values.month);
-      formData.append('year', values.year.toString());
+      formData.append('month', suggestedMonth);
+      formData.append('year', suggestedYear.toString());
       formData.append('documentType', values.documentType);
 
       console.log('Uploading document:', {
         company: companyValue,
-        month: values.month,
-        year: values.year,
+        month: suggestedMonth,
+        year: suggestedYear,
         documentType: values.documentType,
         fileName: (actualFile as File).name,
+        detectedFromFile: monthMatch && yearMatch ? true : false
       });
 
       const response = await fetch('/api/accounting/upload', {
