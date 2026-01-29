@@ -201,19 +201,48 @@ Return ONLY the JSON object with the analysis results. Ensure plStatement contai
       
       if (isPDF) {
         console.log('[DocumentProcessingService] Processing PDF document');
+        console.log('[DocumentProcessingService] File size:', fileBuffer.length, 'bytes');
         console.log('[DocumentProcessingService] Base64 content length:', base64Content.length);
-        console.log('[DocumentProcessingService] Base64 preview (first 100 chars):', base64Content.substring(0, 100));
         
-        // Use the file content type for PDFs
-        // Try using 'file' type which is the standard for document uploads
-        contentParts.push({
-          type: 'file',
-          source: {
-            type: 'base64',
-            media_type: 'application/pdf',
-            data: base64Content,
-          },
-        });
+        // Check file size - Claude has limits on document size
+        const fileSizeInMB = fileBuffer.length / (1024 * 1024);
+        if (fileSizeInMB > 10) {
+          throw new Error(`PDF file is too large (${fileSizeInMB.toFixed(1)}MB). Maximum size is 10MB for Claude processing.`);
+        }
+        
+        // Validate base64 content
+        if (!base64Content || base64Content.length === 0) {
+          throw new Error('PDF file content is empty or invalid');
+        }
+        
+        // Clean base64 content - remove any whitespace or invalid characters
+        const cleanBase64 = base64Content.replace(/[^a-zA-Z0-9+/=]/g, '');
+        
+        console.log('[DocumentProcessingService] Cleaned base64 length:', cleanBase64.length);
+        console.log('[DocumentProcessingService] Base64 preview (first 100 chars):', cleanBase64.substring(0, 100));
+        
+        // Use the document type for PDFs with proper formatting
+        try {
+          contentParts.push({
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: 'application/pdf',
+              data: cleanBase64,
+            },
+          });
+        } catch (formatError) {
+          console.warn('[DocumentProcessingService] Document format failed, trying image fallback:', formatError);
+          // If document type fails, try as image (some PDFs can be processed as images)
+          contentParts.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: 'image/png',
+              data: cleanBase64,
+            },
+          });
+        }
       } else {
         // For images (png, jpg, etc.)
         console.log('[DocumentProcessingService] Processing image document');
@@ -222,12 +251,15 @@ Return ONLY the JSON object with the analysis results. Ensure plStatement contai
                               filename.toLowerCase().endsWith('.gif') ? 'image/gif' :
                               filename.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/png';
         
+        // Clean base64 content for images too
+        const cleanBase64 = base64Content.replace(/[^a-zA-Z0-9+/=]/g, '');
+        
         contentParts.push({
           type: 'image',
           source: {
             type: 'base64',
             media_type: imageMimeType,
-            data: base64Content,
+            data: cleanBase64,
           },
         });
       }
