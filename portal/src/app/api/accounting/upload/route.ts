@@ -60,6 +60,7 @@ export const POST = requireAuth(async (request: NextRequest) => {
     const year = parseInt(formData.get('year') as string);
     const documentType = formData.get('documentType') as string;
 
+    console.log('========== UPLOAD REQUEST START ==========');
     console.log('Upload request received:', {
       hasFile: !!file,
       fileName: file?.name,
@@ -69,6 +70,8 @@ export const POST = requireAuth(async (request: NextRequest) => {
       month,
       year,
       documentType,
+      userId: session?.user?.id,
+      timestamp: new Date().toISOString(),
     });
 
     // Validation
@@ -364,9 +367,18 @@ export const POST = requireAuth(async (request: NextRequest) => {
     }, { status: 201 });
 
   } catch (error: any) {
+    console.error('========== UPLOAD REQUEST FAILED ==========');
     console.error('Error uploading accounting document:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      code: error.code,
+    });
+    console.error('========== UPLOAD REQUEST END ==========');
+    
     return NextResponse.json(
-      { error: 'Failed to upload document', message: error.message },
+      { error: 'Failed to upload document', message: error.message, timestamp: new Date().toISOString() },
       { status: 500 }
     );
   }
