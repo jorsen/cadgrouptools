@@ -16,6 +16,9 @@ const UserSchema = new Schema(
     lastLogin: { type: Date },
     requirePasswordChange: { type: Boolean, default: false },
     lastPasswordReset: { type: Date },
+    // Password reset token fields
+    resetPasswordToken: { type: String },
+    resetPasswordExpiry: { type: Date },
     // Optional profile fields
     avatar: { type: String },
     phone: { type: String },
