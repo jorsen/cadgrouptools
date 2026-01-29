@@ -281,7 +281,7 @@ Return ONLY the JSON object with the analysis results. Ensure plStatement contai
       // Use the messages API
       // Note: PDF support is now generally available in Claude, no beta needed
       const response = await client.messages.create({
-        model: 'claude-3-5-sonnet-20241022', // Use a more stable model version
+        model: 'claude-3-5-sonnet-20240620', // Use the correct stable model version
         max_tokens: 4096, // Reduce max tokens to avoid issues
         messages: [
           {
