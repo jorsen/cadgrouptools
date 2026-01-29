@@ -5,7 +5,7 @@ services:
     env: node
     plan: starter
     nodeVersion: 18
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm start
     publishDir: .next
     healthCheckPath: /api/health/push
