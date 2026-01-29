@@ -177,6 +177,8 @@ This is an automated email from CADGroup Tools Portal.
 Sent at: ${new Date().toLocaleString()}
     `;
 
+    console.log('Attempting to send password reset email to:', user.email);
+    
     const emailSent = await emailNotificationService.sendCustomEmail(
       user.email,
       subject,
@@ -185,15 +187,26 @@ Sent at: ${new Date().toLocaleString()}
     );
 
     if (!emailSent) {
-      console.error('Failed to send password reset email to:', user.email);
-      // Still return success to prevent enumeration
+      console.error('FAILED to send password reset email to:', user.email);
+      // Return info about email delivery failure for debugging
+      return NextResponse.json({ 
+        message: 'If an account exists with this email, a password reset link has been sent.',
+        success: true,
+        // Debug info - remove in production if needed
+        debug: {
+          emailDeliveryAttempted: true,
+          emailDeliverySuccess: false,
+          note: 'Email delivery failed. Check SendGrid configuration and recipient mail server.'
+        }
+      });
     } else {
-      console.log('Password reset email sent to:', user.email);
+      console.log('SUCCESS: Password reset email sent to:', user.email);
     }
 
     return NextResponse.json({ 
       message: 'If an account exists with this email, a password reset link has been sent.',
-      success: true
+      success: true,
+      emailSent: true
     });
   } catch (error) {
     console.error('Error in forgot password:', error);
