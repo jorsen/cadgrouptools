@@ -95,7 +95,7 @@ export default function UserManagementPage() {
       
       // Map the backend data to match our User interface
       const mappedUsers = data.users.map((user: any) => ({
-        id: user._id || user.id,
+        id: String(user._id || user.id),  // Ensure ID is a string
         name: user.name || 'Unknown User',
         email: user.email || '',
         role: user.role || 'staff',
@@ -135,17 +135,23 @@ export default function UserManagementPage() {
       okType: 'danger',
       onOk: async () => {
         try {
-          const response = await fetch(`/api/admin/users?id=${user.id}`, {
+          console.log('Deleting user with ID:', user.id);
+          const response = await fetch(`/api/admin/users?id=${encodeURIComponent(user.id)}`, {
             method: 'DELETE',
           });
           
-          if (!response.ok) throw new Error('Failed to delete user');
+          const data = await response.json();
+          
+          if (!response.ok) {
+            console.error('Delete error response:', data);
+            throw new Error(data.error || 'Failed to delete user');
+          }
           
           setUsers(users.filter(u => u.id !== user.id));
           message.success('User deleted successfully');
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error deleting user:', error);
-          message.error('Failed to delete user');
+          message.error(error.message || 'Failed to delete user');
         }
       },
     });
