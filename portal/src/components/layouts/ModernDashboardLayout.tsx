@@ -286,7 +286,10 @@ export default function ModernDashboardLayout({ children, breadcrumbs = [] }: Da
       key: 'logout',
       icon: <LogoutOutlined />,
       label: 'Logout',
-      onClick: () => signOut({ callbackUrl: '/auth/signin' }),
+      onClick: async () => {
+        await signOut({ redirect: false });
+        window.location.href = '/auth/signin';
+      },
       danger: true,
     },
   ];

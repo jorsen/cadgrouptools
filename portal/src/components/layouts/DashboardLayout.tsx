@@ -103,7 +103,8 @@ export default function DashboardLayout({ children, breadcrumbs = [] }: Dashboar
   }
 
   const handleSignOut = async () => {
-    await signOut({ redirect: true, callbackUrl: '/auth/signin' });
+    await signOut({ redirect: false });
+    window.location.href = '/auth/signin';
   };
 
   const menuItems: MenuProps['items'] = [
