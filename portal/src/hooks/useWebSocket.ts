@@ -35,6 +35,13 @@ export const useWebSocket = (url: string, options: WebSocketOptions = {}) => {
       console.log('WebSocket URL not configured, skipping connection');
       return;
     }
+    
+    // Skip WebSocket in production if pointing to localhost (not configured)
+    const isProduction = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+    if (isProduction && url.includes('localhost')) {
+      console.log('WebSocket URL points to localhost in production, skipping connection');
+      return;
+    }
 
     try {
       // Clean up existing connection

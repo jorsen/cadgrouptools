@@ -17,6 +17,19 @@ class ActivityWebSocketService {
     const wsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || 
                   (typeof window !== 'undefined' ? window.location.origin : '');
     
+    // Skip connection if URL is not set or if it points to localhost in production
+    if (!wsUrl || wsUrl === '') {
+      console.log('WebSocket URL not configured, skipping connection');
+      return;
+    }
+    
+    // Skip WebSocket in production if pointing to localhost (not configured)
+    const isProduction = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+    if (isProduction && wsUrl.includes('localhost')) {
+      console.log('WebSocket URL points to localhost in production, skipping connection');
+      return;
+    }
+    
     this.socket = io(wsUrl, {
       transports: ['websocket', 'polling'],
       query: { userId },
