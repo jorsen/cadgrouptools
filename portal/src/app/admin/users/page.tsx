@@ -96,8 +96,8 @@ export default function UserManagementPage() {
       // Map the backend data to match our User interface
       const mappedUsers = data.users.map((user: any) => ({
         id: user._id || user.id,
-        name: user.name,
-        email: user.email,
+        name: user.name || 'Unknown User',
+        email: user.email || '',
         role: user.role || 'staff',
         department: user.department || '',
         status: user.status || 'active',
@@ -305,8 +305,10 @@ export default function UserManagementPage() {
 
   const getFilteredUsers = () => {
     return users.filter(user => {
-      const matchesSearch = user.name.toLowerCase().includes(searchText.toLowerCase()) ||
-                          user.email.toLowerCase().includes(searchText.toLowerCase());
+      const userName = user.name || '';
+      const userEmail = user.email || '';
+      const matchesSearch = userName.toLowerCase().includes(searchText.toLowerCase()) ||
+                          userEmail.toLowerCase().includes(searchText.toLowerCase());
       const matchesRole = filterRole === 'all' || user.role === filterRole;
       const matchesStatus = filterStatus === 'all' || user.status === filterStatus;
       return matchesSearch && matchesRole && matchesStatus;
@@ -320,12 +322,12 @@ export default function UserManagementPage() {
       render: (record: User) => (
         <Space>
           <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#1677ff' }}>
-            {record.name.charAt(0)}
+            {(record.name || 'U').charAt(0)}
           </Avatar>
           <div>
-            <Text strong>{record.name}</Text>
+            <Text strong>{record.name || 'Unknown User'}</Text>
             <br />
-            <Text type="secondary" style={{ fontSize: 12 }}>{record.email}</Text>
+            <Text type="secondary" style={{ fontSize: 12 }}>{record.email || ''}</Text>
           </div>
         </Space>
       ),
@@ -336,7 +338,7 @@ export default function UserManagementPage() {
       key: 'role',
       render: (role: string) => (
         <Tag color={role === 'admin' ? 'gold' : 'blue'}>
-          {role.toUpperCase()}
+          {(role || 'staff').toUpperCase()}
         </Tag>
       ),
     },
@@ -344,20 +346,23 @@ export default function UserManagementPage() {
       title: 'Department',
       dataIndex: 'department',
       key: 'department',
+      render: (department: string) => department || '-',
     },
     {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => {
+        const safeStatus = status || 'active';
         const config = {
           active: { color: 'green', icon: <CheckCircleOutlined /> },
           inactive: { color: 'gray', icon: <CloseCircleOutlined /> },
           suspended: { color: 'red', icon: <ExclamationCircleOutlined /> },
         };
+        const statusConfig = config[safeStatus as keyof typeof config] || config.active;
         return (
-          <Tag color={config[status as keyof typeof config].color} icon={config[status as keyof typeof config].icon}>
-            {status.toUpperCase()}
+          <Tag color={statusConfig.color} icon={statusConfig.icon}>
+            {safeStatus.toUpperCase()}
           </Tag>
         );
       },
