@@ -36,7 +36,7 @@ class EmailNotificationService {
    * Create email template from push notification
    */
   private createEmailTemplate(notification: NotificationPayload): EmailTemplate {
-    const portalUrl = process.env.NEXTAUTH_URL || 'https://cadgrouptools.onrender.com';
+    const portalUrl = process.env.NEXTAUTH_URL || 'https://cadgrouptools-qtf0.onrender.com';
     
     // Determine the appropriate CTA based on notification type
     let ctaUrl = `${portalUrl}/dashboard`;

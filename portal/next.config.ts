@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   },
   // Ensure proper handling of environment variables in production
   env: {
-    NEXTAUTH_URL: process.env.NEXTAUTH_URL || (process.env.NODE_ENV === 'production' ? 'https://cadgrouptools.onrender.com' : 'http://localhost:3000'),
+    NEXTAUTH_URL: process.env.NEXTAUTH_URL || (process.env.NODE_ENV === 'production' ? 'https://cadgrouptools-qtf0.onrender.com' : 'http://localhost:3000'),
     NEXT_PUBLIC_WEBSOCKET_URL: process.env.NEXT_PUBLIC_WEBSOCKET_URL || process.env.NEXTAUTH_URL || '',
   },
   // Optimize for production

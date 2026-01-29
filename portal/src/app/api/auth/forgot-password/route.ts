@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     await user.save();
 
     // Generate reset URL
-    const portalUrl = process.env.NEXTAUTH_URL || 'https://cadgrouptools.onrender.com';
+    const portalUrl = process.env.NEXTAUTH_URL || 'https://cadgrouptools-qtf0.onrender.com';
     const resetUrl = `${portalUrl}/auth/reset-password?token=${resetToken}&email=${encodeURIComponent(email)}`;
 
     // Send email

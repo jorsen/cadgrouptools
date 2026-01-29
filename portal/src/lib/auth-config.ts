@@ -14,7 +14,7 @@ if (!process.env.NEXTAUTH_SECRET) {
 // Ensure we have proper environment variables
 const requiredEnvVars = {
   NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
-  NEXTAUTH_URL: process.env.NEXTAUTH_URL || (process.env.NODE_ENV === 'production' ? 'https://cadgrouptools.onrender.com' : 'http://localhost:3000'),
+  NEXTAUTH_URL: process.env.NEXTAUTH_URL || (process.env.NODE_ENV === 'production' ? 'https://cadgrouptools-qtf0.onrender.com' : 'http://localhost:3000'),
   NODE_ENV: process.env.NODE_ENV || 'production'
 };
 

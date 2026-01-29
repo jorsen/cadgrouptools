@@ -20,7 +20,7 @@ class UserEmailService {
    * Send invitation email to new user
    */
   async sendUserInvitation(data: UserInviteData): Promise<boolean> {
-    const portalUrl = process.env.NEXTAUTH_URL || 'https://cadgrouptools.onrender.com';
+    const portalUrl = process.env.NEXTAUTH_URL || 'https://cadgrouptools-qtf0.onrender.com';
     
     const subject = 'Welcome to CADGroup Tools Portal - Account Created';
     
@@ -204,7 +204,7 @@ This is an automated email from CADGroup Tools Portal.
    * Send password reset email
    */
   async sendPasswordReset(data: PasswordResetData): Promise<boolean> {
-    const portalUrl = process.env.NEXTAUTH_URL || 'https://cadgrouptools.onrender.com';
+    const portalUrl = process.env.NEXTAUTH_URL || 'https://cadgrouptools-qtf0.onrender.com';
     
     const subject = 'CADGroup Tools Portal - Password Reset';
     
